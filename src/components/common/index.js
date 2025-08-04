@@ -1,0 +1,10 @@
+// Export all common components for easier importing
+export { default as GlobalSearch } from './GlobalSearch';
+export { default as Logo } from './Logo';
+export { default as Notifications } from './Notifications';
+export { default as ProfileAvatar } from './ProfileAvatar';
+export { default as AutoRenewBadge } from './AutoRenewBadge';
+export { default as SubscriptionStatusBadge } from './SubscriptionStatusBadge';
+export { default as CompanyStatusBadge } from './CompanyStatusBadge';
+export { default as CompanyTypeBadge } from './CompanyTypeBadge';
+export { default as SubscriptionTypeBadge } from './SubscriptionTypeBadge'; 
