@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext, useEffect, useRef } from "react";
 import { AuthContext } from "../App";
 import {
   Box,
@@ -23,6 +23,8 @@ import {
   ListItemAvatar,
   ListItemText,
   ListItemButton,
+  FormControl,
+  FormHelperText,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import PhoneIcon from "@mui/icons-material/Phone";
@@ -35,6 +37,8 @@ import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import PersonIcon from "@mui/icons-material/Person";
 import EngineeringIcon from "@mui/icons-material/Engineering";
 import CloseIcon from "@mui/icons-material/Close";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import SecurityIcon from "@mui/icons-material/Security";
 import axios from "axios";
 import apiClient, { API_BASE_URL } from "api/config";
 
@@ -126,24 +130,18 @@ const Login = () => {
   const { setIsAuthenticated } = useContext(AuthContext);
 
   // حالات النظام
-  const [step, setStep] = useState(1); // 1: إدخال رقم الهاتف، 2: إدخال التحقق، 3: إدخال OTP
+  const [step, setStep] = useState(1); // 1: إدخال رمز التحقق CAPTCHA، 2: إدخال رقم الهاتف، 3: إدخال OTP
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otpCode, setOtpCode] = useState("");
-  const [verificationCode, setVerificationCode] = useState(""); // كود التحقق
-  const [userEnteredCode, setUserEnteredCode] = useState(""); // الكود المدخل من المستخدم
+  const [captchaCode, setCaptchaCode] = useState("");
+  const [userCaptchaInput, setUserCaptchaInput] = useState("");
+  const [captchaError, setCaptchaError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-
-  // دالة توليد كود التحقق العشوائي
-  const generateVerificationCode = () => {
-    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    let code = '';
-    for (let i = 0; i < 6; i++) {
-      code += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return code;
-  };
+  
+  // مرجع للكانفاس الخاص بالكابتشا
+  const canvasRef = useRef(null);
 
   // حالات العد التنازلي
   const [countdown, setCountdown] = useState(0);
@@ -154,6 +152,113 @@ const Login = () => {
 
   // حالة نافذة الدعم
   const [supportDialogOpen, setSupportDialogOpen] = useState(false);
+  
+  // توليد رمز CAPTCHA عشوائي
+  const generateCaptchaCode = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+    let captcha = "";
+    for (let i = 0; i < 6; i++) {
+      captcha += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return captcha;
+  };
+  
+  // رسم الكابتشا على الكانفاس
+  const drawCaptcha = (captcha) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext("2d");
+    const width = canvas.width;
+    const height = canvas.height;
+    
+    // تنظيف الكانفاس
+    ctx.clearRect(0, 0, width, height);
+    
+    // خلفية عشوائية
+    ctx.fillStyle = "#f5f5f5";
+    ctx.fillRect(0, 0, width, height);
+    
+    // إضافة خطوط وأشكال عشوائية للتشويش
+    for (let i = 0; i < 10; i++) {
+      ctx.beginPath();
+      ctx.moveTo(Math.random() * width, Math.random() * height);
+      ctx.lineTo(Math.random() * width, Math.random() * height);
+      ctx.strokeStyle = `rgba(${Math.random() * 100}, ${Math.random() * 100}, ${Math.random() * 100}, 0.5)`;
+      ctx.lineWidth = Math.random() * 2;
+      ctx.stroke();
+    }
+    
+    // إضافة نقاط عشوائية للتشويش
+    for (let i = 0; i < 100; i++) {
+      ctx.beginPath();
+      ctx.arc(Math.random() * width, Math.random() * height, Math.random() * 2, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${Math.random() * 200}, ${Math.random() * 200}, ${Math.random() * 200}, 0.5)`;
+      ctx.fill();
+    }
+    
+    // كتابة النص
+    ctx.font = "bold 24px Arial";
+    ctx.fillStyle = "#333";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    
+    // كتابة كل حرف بزاوية وحجم مختلف
+    for (let i = 0; i < captcha.length; i++) {
+      const x = (width / (captcha.length + 1)) * (i + 1);
+      const y = height / 2 + Math.random() * 10 - 5;
+      const rotation = Math.random() * 0.4 - 0.2; // زاوية عشوائية بين -0.2 و 0.2 راديان
+      
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+      ctx.fillStyle = `rgb(${Math.floor(Math.random() * 80)}, ${Math.floor(Math.random() * 80)}, ${Math.floor(Math.random() * 80)})`;
+      ctx.fillText(captcha.charAt(i), 0, 0);
+      ctx.restore();
+    }
+  };
+  
+  // تحديث الكابتشا
+  const refreshCaptcha = () => {
+    const newCaptchaCode = generateCaptchaCode();
+    setCaptchaCode(newCaptchaCode);
+    setUserCaptchaInput("");
+    setCaptchaError("");
+    setTimeout(() => drawCaptcha(newCaptchaCode), 50);
+  };
+  
+  // توليد الكابتشا عند تحميل الصفحة
+  useEffect(() => {
+    refreshCaptcha();
+  }, []);
+  
+  // التحقق من الكابتشا
+  const handleVerifyCaptcha = (e) => {
+    e.preventDefault();
+    
+    if (!userCaptchaInput) {
+      setCaptchaError("يرجى إدخال رمز التحقق");
+      return;
+    }
+    
+    if (userCaptchaInput.toLowerCase() !== captchaCode.toLowerCase()) {
+      setCaptchaError("رمز التحقق غير صحيح، يرجى المحاولة مرة أخرى");
+      refreshCaptcha();
+      setUserCaptchaInput("");
+      return;
+    }
+    
+    // الانتقال إلى الخطوة التالية (إدخال رقم الهاتف)
+    setStep(2);
+    setCaptchaError("");
+    setSuccess("تم التحقق بنجاح");
+  };
+  
+  // التعامل مع تغيير قيمة الكابتشا
+  const handleCaptchaInputChange = (e) => {
+    setUserCaptchaInput(e.target.value);
+    setCaptchaError("");
+  };
 
   // بيانات المهندسين للدعم
   const supportEngineers = [
@@ -256,16 +361,27 @@ const Login = () => {
     setError("");
 
     try {
-      // توليد كود التحقق
-      const code = generateVerificationCode();
-      setVerificationCode(code);
-      
-      // عرض كود التحقق للمستخدم
-      setSuccess(`كود التحقق الخاص بك هو: ${code}`);
-      setStep(2); // الانتقال إلى خطوة إدخال كود التحقق
-      
-      // تخزين كود التحقق مؤقتاً
-      localStorage.setItem("verificationCode", code);
+      // محاكاة إرسال الرمز
+      await axios
+        .post(
+          `${API_BASE_URL}/api/dashbord/auth/login`,
+          { phoneNumber: phoneNumber },
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${process.env.TOKEN_ADMIN || "dPdJ0ThcQ6ODl2_z5Nn2iO:APA91bE6yk0i_5M3YAmtAvBwEZIayJ4hOqFDMvQwQwhqTfn2bDwirSInge1kZGskTwvtzsEuZ6-FFU-06NVrAbTmB9UpQ63M9v5tgmKwj4_evGfJMz6PlIiWxOlvhHdnhR6fAbodYhRV"}  `,
+            },
+            
+          }
+        )
+        .then((res, err) => {
+          if (res.status === 501)
+            return setError(
+              "حدث خطأ أثناء إرسال الرمز. يرجى المحاولة مرة أخرى."
+            );
+          if (res.status === 200) setStep(3);
+          setSuccess(`تم إرسال رمز التحقق إلى +966 ${phoneNumber}`);
+        });
 
       setCountdown(60); // 60 ثانية للعد التنازلي
       setCanResend(false);
@@ -300,49 +416,6 @@ const Login = () => {
       setError("حدث خطأ أثناء إعادة إرسال الرمز");
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // التحقق من كود التحقق
-  const handleVerifyCode = async (e) => {
-    e.preventDefault();
-    
-    if (userEnteredCode.length !== 6) {
-      setError("يرجى إدخال كود التحقق المكون من 6 خانات");
-      return;
-    }
-
-    const storedCode = localStorage.getItem("verificationCode");
-    if (userEnteredCode === storedCode) {
-      // إذا كان الكود صحيحاً، قم بالاتصال بال API لإرسال رمز OTP
-      setIsLoading(true);
-      try {
-        const response = await axios.post(
-          `${API_BASE_URL}/api/dashbord/auth/login`,
-          { phoneNumber: phoneNumber },
-          {
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${process.env.TOKEN_ADMIN || "dPdJ0ThcQ6ODl2_z5Nn2iO:APA91bE6yk0i_5M3YAmtAvBwEZIayJ4hOqFDMvQwQwhqTfn2bDwirSInge1kZGskTwvtzsEuZ6-FFU-06NVrAbTmB9UpQ63M9v5tgmKwj4_evGfJMz6PlIiWxOlvhHdnhR6fAbodYhRV"}  `,
-            },
-          }
-        );
-        
-        if (response.status === 200) {
-          setStep(3); // الانتقال إلى خطوة إدخال OTP
-          setSuccess(`تم إرسال رمز التحقق إلى +966 ${phoneNumber}`);
-          // مسح كود التحقق المخزن
-          localStorage.removeItem("verificationCode");
-        } else {
-          setError("حدث خطأ أثناء إرسال رمز التحقق");
-        }
-      } catch (error) {
-        setError("حدث خطأ أثناء الاتصال بالخادم");
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-      setError("كود التحقق غير صحيح");
     }
   };
 
@@ -402,11 +475,20 @@ const Login = () => {
 
   // العودة لخطوة إدخال رقم الهاتف
   const handleBackToPhone = () => {
-    setStep(1);
+    setStep(2);
     setOtpCode("");
     setError("");
     setSuccess("");
     setDisplayOTP("");
+  };
+  
+  // العودة لخطوة إدخال الكابتشا
+  const handleBackToCaptcha = () => {
+    setStep(1);
+    setPhoneNumber("");
+    setError("");
+    setSuccess("");
+    refreshCaptcha();
   };
 
   // فتح نافذة الدعم
@@ -447,6 +529,8 @@ const Login = () => {
             </Typography>
             <Typography variant="body2" color="text.secondary">
               {step === 1
+                ? "أدخل رمز التحقق للتأكد أنك لست روبوت"
+                : step === 2
                 ? "أدخل رقم هاتفك لتلقي رمز التحقق"
                 : "أدخل رمز التحقق المُرسل إلى هاتفك"}
             </Typography>
@@ -465,8 +549,97 @@ const Login = () => {
             </Alert>
           )}
 
-          {/* الخطوة الأولى: إدخال رقم الهاتف */}
+          {/* الخطوة الأولى: إدخال رمز التحقق CAPTCHA */}
           {step === 1 && (
+            <Box component="form" onSubmit={handleVerifyCaptcha}>
+              <Box sx={{ mb: 3 }}>
+                <Typography
+                  variant="body2"
+                  sx={{ mb: 2, color: "text.secondary", textAlign: "center" }}
+                >
+                  يرجى إدخال الرمز الظاهر في الصورة أدناه
+                </Typography>
+                
+                <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+                  <Box
+                    sx={{
+                      position: "relative",
+                      width: "100%",
+                      maxWidth: 280,
+                      height: 80,
+                      border: "1px solid",
+                      borderColor: captchaError ? "error.main" : "divider",
+                      borderRadius: 1,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <canvas
+                      ref={canvasRef}
+                      width={280}
+                      height={80}
+                      style={{ width: "100%", height: "100%" }}
+                    />
+                    <Button
+                      size="small"
+                      sx={{
+                        position: "absolute",
+                        right: 5,
+                        top: 5,
+                        minWidth: "auto",
+                        p: 0.5,
+                        bgcolor: "rgba(255,255,255,0.7)",
+                        borderRadius: "50%",
+                      }}
+                      onClick={refreshCaptcha}
+                    >
+                      <RefreshIcon fontSize="small" />
+                    </Button>
+                  </Box>
+                </Box>
+                
+                <FormControl fullWidth error={!!captchaError}>
+                  <StyledTextField
+                    fullWidth
+                    label="رمز التحقق"
+                    value={userCaptchaInput}
+                    onChange={handleCaptchaInputChange}
+                    placeholder="أدخل الرمز الظاهر في الصورة"
+                    variant="outlined"
+                    autoFocus
+                    required
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SecurityIcon color="primary" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                  {captchaError && <FormHelperText>{captchaError}</FormHelperText>}
+                </FormControl>
+              </Box>
+              
+              <SubmitButton
+                type="submit"
+                fullWidth
+                variant="contained"
+                size="large"
+                disabled={isLoading || !userCaptchaInput}
+                startIcon={
+                  isLoading ? (
+                    <CircularProgress size={20} color="inherit" />
+                  ) : (
+                    <VerifiedIcon />
+                  )
+                }
+              >
+                {isLoading ? "جاري التحقق..." : "تحقق من الرمز"}
+              </SubmitButton>
+            </Box>
+          )}
+          
+          {/* الخطوة الثانية: إدخال رقم الهاتف */}
+          {step === 2 && (
             <Box component="form" onSubmit={handleSendOTP}>
               <Box sx={{ mb: 3 }}>
                 <Typography
@@ -527,57 +700,18 @@ const Login = () => {
               >
                 {isLoading ? "جاري الإرسال..." : "إرسال رمز التحقق"}
               </SubmitButton>
-            </Box>
-          )}
-
-          {/* الخطوة الثانية: إدخال كود التحقق */}
-          {step === 2 && (
-            <Box component="form" onSubmit={handleVerifyCode}>
-              <Box sx={{ mb: 3 }}>
-                <Box sx={{ textAlign: "center", mb: 3 }}>
-                  <Typography variant="body2" sx={{ mb: 1, color: "text.secondary" }}>
-                    أدخل كود التحقق المعروض أدناه:
-                  </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: "bold", color: "primary.main", mb: 2 }}>
-                    {verificationCode}
-                  </Typography>
-                </Box>
-
-                <OTPTextField
-                  fullWidth
-                  label="كود التحقق"
-                  value={userEnteredCode}
-                  onChange={(e) => setUserEnteredCode(e.target.value.toUpperCase().slice(0, 6))}
-                  placeholder="XXXXXX"
-                  variant="outlined"
-                  autoFocus
-                  required
-                  inputProps={{
-                    maxLength: 6,
-                    style: { textAlign: "center", letterSpacing: "0.5em" }
-                  }}
-                />
-              </Box>
-
-              <Box sx={{ display: "flex", gap: 2 }}>
-                <Button
-                  onClick={handleBackToPhone}
-                  variant="outlined"
-                  fullWidth
-                  startIcon={<ArrowBackIcon />}
-                >
-                  رجوع
-                </Button>
-                <SubmitButton
-                  type="submit"
-                  fullWidth
-                  variant="contained"
-                  disabled={isLoading || userEnteredCode.length !== 6}
-                  startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <VerifiedIcon />}
-                >
-                  {isLoading ? "جاري التحقق..." : "تحقق"}
-                </SubmitButton>
-              </Box>
+              
+              {/* زر العودة للكابتشا */}
+              <Button
+                fullWidth
+                variant="text"
+                onClick={handleBackToCaptcha}
+                disabled={isLoading}
+                startIcon={<ArrowBackIcon />}
+                sx={{ mt: 2, fontWeight: 500 }}
+              >
+                العودة للخطوة السابقة
+              </Button>
             </Box>
           )}
 
