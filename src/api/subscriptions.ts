@@ -181,7 +181,7 @@ export const approveSubscriptionRequest = async (
   console.log(`✅ جاري الموافقة على طلب الاشتراك: ${requestId}`);
   
   try {
-    const response = await apiClient.put(`/subscriptions/pending-requests/${requestId}/approve`);
+    const response = await apiClient.get(`/company/AgreedRegistrationCompany?id=${requestId}`);
     console.log('📊 استجابة الموافقة على الطلب:', response.data);
     return response.data;
   } catch (error) {
@@ -195,14 +195,14 @@ export const rejectSubscriptionRequest = async (
   requestId: string,
   reason: string
 ): Promise<{ success: boolean; data: any; message: string }> => {
-  console.log(`❌ جاري رفض طلب الاشتراك: ${requestId} - السبب: ${reason}`);
+  console.log(`❌ جاري حذف طلب الاشتراك: ${requestId} - السبب: ${reason}`);
   
   try {
-    const response = await apiClient.put(`/subscriptions/pending-requests/${requestId}/reject`, { reason });
-    console.log('📊 استجابة رفض الطلب:', response.data);
+    const response = await apiClient.delete(`/company/DeleteCompanyRegistration?id=${requestId}`);
+    console.log('📊 استجابة حذف الطلب:', response.data);
     return response.data;
   } catch (error) {
-    console.error('❌ خطأ في رفض طلب الاشتراك:', error);
+    console.error('❌ خطأ في حذف طلب الاشتراك:', error);
     throw error;
   }
 };

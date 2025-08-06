@@ -83,7 +83,7 @@ apiClient.interceptors.request.use(
 
     if (user) {
       // دعم طرق مختلفة للـ token حسب ما يرسله الباك اند
-      const token = user.accessToken || user.token || user.access_token || user.authToken;
+      const token = user.accessToken ;
       
       if (token && API_CONFIG.enableAuth) {
         // إضافة الـ token في عدة أماكن لضمان التوافق مع الباك اند

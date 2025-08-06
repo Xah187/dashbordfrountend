@@ -207,16 +207,16 @@ const Subscriptions = () => {
     try {
       const result = await approveSubscriptionRequest(requestId);
       
-      setNotification({
-        open: true,
-        message: 'تم قبول الطلب بنجاح وإنشاء الاشتراك',
-        severity: 'success'
-      });
+      // setNotification({
+      //   open: true,
+      //   message: 'تم قبول الطلب بنجاح وإنشاء الاشتراك',
+      //   severity: 'success'
+      // });
       
-      // تحديث البيانات
-      fetchPendingRequests();
-      fetchSubscriptions();
-      fetchStats();
+      // // تحديث البيانات
+      // fetchPendingRequests();
+      // fetchSubscriptions();
+      // fetchStats();
       
     } catch (err) {
       console.error('❌ Error approving request with NEW API:', err);
@@ -235,7 +235,7 @@ const Subscriptions = () => {
       
       setNotification({
         open: true,
-        message: 'تم رفض الطلب بنجاح',
+        message: 'تم حذف الطلب بنجاح',
         severity: 'info'
       });
       
@@ -982,7 +982,7 @@ const Subscriptions = () => {
                                 </IconButton>
                               </Tooltip>
                               
-                              <Tooltip title="رفض الطلب">
+                              <Tooltip title="حذف طلب">
                                 <IconButton
                                   size="small"
                                   color="error"
@@ -1117,10 +1117,10 @@ const Subscriptions = () => {
 
       {/* حوار رفض طلب الاشتراك */}
       <Dialog open={openRequestDialog} onClose={() => setOpenRequestDialog(false)}>
-        <DialogTitle>رفض طلب الاشتراك</DialogTitle>
+        <DialogTitle>طلب حذف الاشتراك</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            هل أنت متأكد من رفض طلب اشتراك {selectedRequest?.companyName}؟
+            هل أنت متأكد من حذف طلب اشتراك {selectedRequest?.companyName}؟
           </DialogContentText>
           <TextField
             fullWidth
@@ -1144,7 +1144,7 @@ const Subscriptions = () => {
             color="error"
             variant="contained"
           >
-            رفض الطلب
+            حذف الطلب
           </Button>
         </DialogActions>
       </Dialog>
