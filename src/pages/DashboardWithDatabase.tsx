@@ -380,15 +380,15 @@ const EnhancedPieChart = ({ data, title }: { data: any[], title: string }) => {
                   border: 'none',
                   borderRadius: 12,
                   boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-                  color: theme.palette.text.primary,
+                  color: theme.palette.mode === 'dark' ? '#ffffff' : theme.palette.text.primary,
                   padding: '12px 16px'
                 }}
                                  formatter={(value, name) => [
-                   <span style={{ fontWeight: 'bold', color: theme.palette.primary.main }}>{value}</span>, 
-                   value === 1 ? 'شركة' : 'شركات'
+                   <span style={{ color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>{`${value} ${value === 1 ? 'شركة' : 'شركات'}`}</span>, 
+                   <span style={{ color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>{name}</span>
                  ]}
                 labelFormatter={(label) => (
-                  <span style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                  <span style={{ fontWeight: 'bold', fontSize: '14px', color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>
                     {label}
                   </span>
                 )}
@@ -539,15 +539,15 @@ const EnhancedBarChart = ({ data, title }: { data: any[], title: string }) => {
                   border: 'none',
                   borderRadius: 12,
                   boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-                  color: theme.palette.text.primary,
+                  color: theme.palette.mode === 'dark' ? '#ffffff' : theme.palette.text.primary,
                   padding: '12px 16px'
                 }}
                                  formatter={(value, name) => [
-                   <span style={{ fontWeight: 'bold', color: '#667eea' }}>{value}</span>, 
-                   value === 1 ? 'مشروع' : 'مشاريع'
+                   <span style={{ color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>{`${value} ${value === 1 ? 'مشروع' : 'مشاريع'}`}</span>, 
+                   <span style={{ color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>{name}</span>
                  ]}
                 labelFormatter={(label) => (
-                  <span style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                  <span style={{ fontWeight: 'bold', fontSize: '14px', color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>
                     {label}
                   </span>
                 )}
