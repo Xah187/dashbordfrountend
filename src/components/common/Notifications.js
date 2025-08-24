@@ -166,6 +166,7 @@ const Notifications = () => {
             maxHeight: 500,
             overflow: 'auto',
             mt: 1.5,
+            borderRadius: (theme) => `${theme.shape.borderRadius}px`,
             '& .MuiMenuItem-root': {
               py: 1,
               px: 2,

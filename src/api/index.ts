@@ -84,7 +84,6 @@ export {
 } from './subscriptions';
 
 export {
-  globalSearch,
   fetchCompanyDetails,
   fetchAdvancedBranchEmployeesStats
 } from './database-api';
@@ -107,7 +106,6 @@ export const API_ENDPOINTS = {
   PENDING_SUBSCRIPTION_REQUESTS: '/api/subscriptions/pending-requests',
   
   // Advanced Company
-  COMPANY_GLOBAL_SEARCH: '/api/companies/search/global',
   COMPANY_DETAILS: '/api/companies/:id/details',
   BRANCH_EMPLOYEES_STATS: '/api/companies/branches/:branchId/employees/stats'
 } as const;

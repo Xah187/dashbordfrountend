@@ -83,7 +83,7 @@ import {
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 
-import { getSubscriptionTypeColor, getSubscriptionStatusColor, getAutoRenewColor } from '../utils/colorUtils';
+import { getSubscriptionTypeColor, getSoftSubscriptionStatusChipSx, getAutoRenewColor } from '../utils/colorUtils';
 import { AutoRenewBadge, SubscriptionStatusBadge } from '../components/common';
 
 // استيراد APIs الجديدة المفعلة للاشتراكات والطلبات المعلقة
@@ -124,6 +124,7 @@ const Subscriptions = () => {
   const [openSuspendDialog, setOpenSuspendDialog] = useState(false);
   const [openDetailsDialog, setOpenDetailsDialog] = useState(false);
   const [openRequestDialog, setOpenRequestDialog] = useState(false);
+  const [openRequestDetailsDialog, setOpenRequestDetailsDialog] = useState(false);
   
   // State للطلبات
   const [pendingRequests, setPendingRequests] = useState([]);
@@ -650,23 +651,38 @@ const Subscriptions = () => {
             onChange={(e, newValue) => setActiveTab(newValue)}
             variant="scrollable"
             scrollButtons="auto"
+            allowScrollButtonsMobile
             sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
           >
             <Tab 
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <BusinessIcon />
+                  <Badge 
+                    badgeContent={stats.activeSubscriptions || stats.totalCompanies || 0}
+                    color="primary"
+                    overlap="circular"
+                    anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                    sx={{ '& .MuiBadge-badge': { fontSize: 10, height: 18, minWidth: 18 } }}
+                  >
+                    <BusinessIcon />
+                  </Badge>
                   <span>الاشتراكات النشطة</span>
-                  <Badge badgeContent={stats.activeSubscriptions || stats.totalCompanies || 0} color="primary" />
                 </Box>
               } 
             />
             <Tab 
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ScheduleIcon />
+                  <Badge 
+                    badgeContent={pendingRequests?.length || 0}
+                    color="warning"
+                    overlap="circular"
+                    anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                    sx={{ '& .MuiBadge-badge': { fontSize: 10, height: 18, minWidth: 18 } }}
+                  >
+                    <ScheduleIcon />
+                  </Badge>
                   <span>طلبات الاشتراك</span>
-                  <Badge badgeContent={pendingRequests?.length || 0} color="warning" />
                 </Box>
               } 
             />
@@ -721,17 +737,23 @@ const Subscriptions = () => {
                 <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                   الاشتراكات النشطة ({stats.activeSubscriptions || stats.totalCompanies || 0} إجمالي، {subscriptions?.length || 0} في هذه الصفحة)
                 </Typography>
-                <TableContainer>
-                  <Table>
+                <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
+                  <Table 
+                    size="small" 
+                    sx={{ 
+                      minWidth: { xs: 600, md: 900 },
+                      '& th, & td': { whiteSpace: 'nowrap', fontSize: { xs: '0.8rem', sm: '0.9rem' }, py: { xs: 0.75, sm: 1 } }
+                    }}
+                  >
                     <TableHead>
                       <TableRow>
                         <TableCell>الشركة</TableCell>
-                        <TableCell>الباقة</TableCell>
-                        <TableCell>تاريخ البدء</TableCell>
-                        <TableCell>تاريخ الانتهاء</TableCell>
-                        <TableCell>المبلغ (ر.س)</TableCell>
+                        <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>الباقة</TableCell>
+                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>تاريخ البدء</TableCell>
+                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>تاريخ الانتهاء</TableCell>
+                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>المبلغ (ر.س)</TableCell>
                         <TableCell>الحالة</TableCell>
-                        <TableCell>الفروع</TableCell>
+                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>الفروع</TableCell>
                         <TableCell>الإجراءات</TableCell>
                       </TableRow>
                     </TableHead>
@@ -765,7 +787,7 @@ const Subscriptions = () => {
                                 </Typography>
                               </Box>
                             </TableCell>
-                            <TableCell>
+                            <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                               <Chip
                                 label={subscription.planName}
                                 color="primary"
@@ -773,10 +795,10 @@ const Subscriptions = () => {
                                 size="small"
                               />
                             </TableCell>
-                            <TableCell>
+                            <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                               {subscription.startDate || 'غير محدد'}
                             </TableCell>
-                            <TableCell>
+                            <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                               <Box>
                                 <Typography variant="body2">
                                   {subscription.endDate || 'غير محدد'}
@@ -800,7 +822,7 @@ const Subscriptions = () => {
                                 })()}
                               </Box>
                             </TableCell>
-                            <TableCell>
+                            <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                               <Typography variant="body2" fontWeight="bold">
                                 {subscription.amount.toLocaleString('en-GB')} ر.س
                               </Typography>
@@ -809,15 +831,15 @@ const Subscriptions = () => {
                               <Chip
                                 icon={getStatusIcon(subscription.status)}
                                 label={getStatusText(subscription.status)}
-                                color={getStatusColor(subscription.status)}
                                 size="small"
                                 sx={{
+                                  ...getSoftSubscriptionStatusChipSx(subscription.status),
                                   fontWeight: 'bold',
                                   minWidth: '80px'
                                 }}
                               />
                             </TableCell>
-                            <TableCell>
+                            <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                               <Box>
                                 <Typography variant="body2">
                                   {subscription.currentBranches} / {subscription.branchesAllowed}
@@ -830,31 +852,31 @@ const Subscriptions = () => {
                             <TableCell>
                               <Box sx={{ display: 'flex', gap: 1 }}>
                                 <Tooltip title="عرض التفاصيل">
-                                  <IconButton
+                              <IconButton
                                     size="small"
                                     onClick={() => {
                                       setSelectedSubscription(subscription);
                                       setOpenDetailsDialog(true);
                                     }}
                                   >
-                                    <VisibilityIcon />
+                                <VisibilityIcon sx={{ fontSize: { xs: 18, sm: 22 } }} />
                                   </IconButton>
                                 </Tooltip>
                                 
                                 <Tooltip title="تجديد">
-                                  <IconButton
+                              <IconButton
                                     size="small"
                                     onClick={() => {
                                       setSelectedSubscription(subscription);
                                       setOpenRenewDialog(true);
                                     }}
                                   >
-                                    <AutoRenewIcon />
+                                <AutoRenewIcon sx={{ fontSize: { xs: 18, sm: 22 } }} />
                                   </IconButton>
                                 </Tooltip>
                                 
                                 <Tooltip title="إيقاف">
-                                  <IconButton
+                              <IconButton
                                     size="small"
                                     color="error"
                                     onClick={() => {
@@ -862,7 +884,7 @@ const Subscriptions = () => {
                                       setOpenSuspendDialog(true);
                                     }}
                                   >
-                                    <CancelIcon />
+                                <CancelIcon sx={{ fontSize: { xs: 18, sm: 22 } }} />
                                   </IconButton>
                                 </Tooltip>
                               </Box>
@@ -877,10 +899,7 @@ const Subscriptions = () => {
               
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 3, gap: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      عرض {subscriptions?.length || 0} من {totalItems} اشتراك (صفحة {currentPage} من {totalPages})
-                    </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
                     <Pagination
                       count={totalPages}
                       page={currentPage}
@@ -900,16 +919,16 @@ const Subscriptions = () => {
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                 طلبات الاشتراك المعلقة ({pendingRequests?.length || 0})
               </Typography>
-              <TableContainer>
-                <Table>
+              <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
+                <Table size="small" sx={{ minWidth: 900 }}>
                   <TableHead>
                     <TableRow>
                       <TableCell>الشركة</TableCell>
-                      <TableCell>نوع الطلب</TableCell>
-                      <TableCell>تاريخ الطلب</TableCell>
-                      <TableCell>مدة الاشتراك</TableCell>
-                      <TableCell>المبلغ المطلوب</TableCell>
-                      <TableCell>معلومات الاتصال</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>نوع الطلب</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>تاريخ الطلب</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>مدة الاشتراك</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>المبلغ المطلوب</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>معلومات الاتصال</TableCell>
                       <TableCell>الإجراءات</TableCell>
                     </TableRow>
                   </TableHead>
@@ -1000,7 +1019,7 @@ const Subscriptions = () => {
                                   size="small"
                                   onClick={() => {
                                     setSelectedRequest(request);
-                                    setOpenDetailsDialog(true);
+                                    setOpenRequestDetailsDialog(true);
                                   }}
                                 >
                                   <VisibilityIcon />
@@ -1062,6 +1081,45 @@ const Subscriptions = () => {
           <Button onClick={() => handleSuspendSubscription('إيقاف إداري')} color="error">
             إيقاف
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* حوار تفاصيل طلب الاشتراك */}
+      <Dialog open={openRequestDetailsDialog} onClose={() => setOpenRequestDetailsDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>تفاصيل طلب الاشتراك</DialogTitle>
+        <DialogContent>
+          {selectedRequest && (
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>اسم الشركة</Typography>
+                <Typography variant="body1">{selectedRequest.companyName}</Typography>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>نوع الطلب</Typography>
+                <Typography variant="body1">{selectedRequest.planType || 'غير محدد'}</Typography>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>تاريخ الطلب</Typography>
+                <Typography variant="body1">{new Date(selectedRequest.requestDate).toLocaleDateString('en-GB')}</Typography>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>المدة</Typography>
+                <Typography variant="body1">{selectedRequest.duration || '12'} شهر</Typography>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>المبلغ المطلوب</Typography>
+                <Typography variant="body1">{(selectedRequest.amount || 0).toLocaleString('en-GB')} ر.س</Typography>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>معلومات الاتصال</Typography>
+                <Typography variant="body1">{selectedRequest.contactEmail || 'غير محدد'}</Typography>
+                <Typography variant="caption" color="text.secondary" dir="ltr">{selectedRequest.contactPhone || 'غير محدد'}</Typography>
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenRequestDetailsDialog(false)}>إغلاق</Button>
         </DialogActions>
       </Dialog>
 

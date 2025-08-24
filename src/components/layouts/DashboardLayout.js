@@ -2,7 +2,7 @@ import React, { useState, useContext, useRef, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../App';
 import { styled } from '@mui/material/styles';
-import { Logo, ProfileAvatar, Notifications, GlobalSearch } from '../common';
+import { Logo, ProfileAvatar } from '../common';
 import { useUser } from '../../contexts/UserContext';
 import {
   Box,
@@ -161,6 +161,13 @@ export default function DashboardLayout() {
     setOpen(false);
   };
 
+  // إغلاق القائمة افتراضياً على الجوال وفتحها على الشاشات الأكبر
+  useEffect(() => {
+    if (isMobile) {
+      setOpen(false);
+    }
+  }, [isMobile]);
+
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
   };
@@ -289,7 +296,8 @@ export default function DashboardLayout() {
             easing: theme.transitions.easing.sharp,
             duration: 300,
           }),
-          ...(open && {
+          // لا نغير عرض الشريط على الجوال
+          ...(!isMobile && open && {
             width: `calc(100% - ${drawerWidth}px)`,
             marginRight: `${drawerWidth}px`,
             transition: theme => theme.transitions.create(['width', 'margin'], {
@@ -303,22 +311,26 @@ export default function DashboardLayout() {
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Logo size="small" sx={{ mr: 1.5 }} />
             {!isMobile && (
-              <Typography variant="h6" component="div" sx={{ fontWeight: 'bold' }}>
+              <Typography 
+                variant="h6" 
+                component="div" 
+                sx={{ 
+                  fontWeight: 'bold', 
+                  color: theme => theme.palette.common.white 
+                }}
+              >
                 مشرف
               </Typography>
             )}
           </Box>
           
-          {/* Global Search Bar */}
+          {/* Global Search Bar (disabled, keep placeholder to preserve layout) */}
           <Box sx={{ 
             flexGrow: 1, 
-            display: 'flex', 
+            display: { xs: 'none', md: 'flex' }, 
             justifyContent: 'center', 
-            mx: { xs: 1, md: 4 },
-            display: { xs: 'none', md: 'flex' }
-          }}>
-            <GlobalSearch />
-          </Box>
+            mx: { xs: 1, md: 4 }
+          }} />
           
           <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1 }}>
             <Tooltip title="الوضع المظلم">
@@ -330,7 +342,6 @@ export default function DashboardLayout() {
                 {darkMode ? <Brightness7Icon /> : <Brightness4Icon />}
               </IconButton>
             </Tooltip>
-            <Notifications />
             <Tooltip title="الإعدادات السريعة">
               <IconButton 
                 color="inherit" 
@@ -355,17 +366,31 @@ export default function DashboardLayout() {
             </IconButton>
           </Box>
           
-          {/* Mobile Search Button */}
+          {/* Mobile Search & Menu Buttons (swapped order on mobile) */}
           <Box sx={{ 
             flexGrow: 1, 
             display: { xs: 'flex', md: 'none' }, 
-            justifyContent: 'flex-end' 
+            justifyContent: 'flex-end',
+            gap: 0.5
           }}>
+            {/* Mobile theme toggle */}
+            <Tooltip title={darkMode ? 'الوضع النهاري' : 'الوضع الليلي'}>
+              <IconButton
+                onClick={toggleDarkMode}
+                color="inherit"
+                aria-label="toggle theme"
+              >
+                {darkMode ? <Brightness7Icon /> : <Brightness4Icon />}
+              </IconButton>
+            </Tooltip>
+            {/* Mobile search button removed to disable global search */}
+            {/* زر فتح القائمة على الجوال */}
             <IconButton
               color="inherit"
-              onClick={() => navigate('/search')}
+              onClick={handleDrawerOpen}
+              aria-label="open drawer"
             >
-              <SearchIcon />
+              <MenuIcon />
             </IconButton>
           </Box>
           
@@ -378,6 +403,7 @@ export default function DashboardLayout() {
                 mt: 1.5,
                 width: 200,
                 maxWidth: '100%',
+                borderRadius: (theme) => `${theme.shape.borderRadius}px`,
                 '& .MuiList-root': {
                   py: 1
                 }
@@ -401,7 +427,8 @@ export default function DashboardLayout() {
           </Menu>
         </Toolbar>
       </AppBar>
-      <Main open={open}>
+      {/* لا نزاحم المحتوى على الجوال عند فتح القائمة */}
+      <Main open={open && !isMobile}>
         <DrawerHeader />
         <Outlet />
       </Main>
@@ -415,9 +442,10 @@ export default function DashboardLayout() {
             position: 'fixed',
           },
         }}
-        variant="persistent"
+        variant={isMobile ? 'temporary' : 'persistent'}
         anchor="right"
         open={open}
+        onClose={handleDrawerClose}
       >
         <DrawerHeader>
           <Box sx={{ display: 'flex', alignItems: 'center', flexDirection: 'column', width: '100%', py: 2 }}>

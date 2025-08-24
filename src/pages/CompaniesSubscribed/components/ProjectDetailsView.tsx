@@ -43,7 +43,6 @@ import {
   Timeline as TimelineIcon,
   AccountBalance as MoneyIcon,
   Assignment as RequestIcon,
-  Archive as ArchiveIcon,
   Group as GroupIcon,
   TrendingUp as RevenueIcon,
   TrendingDown as ExpenseIcon,
@@ -52,10 +51,11 @@ import {
   CheckCircle as CheckIcon,
   Schedule as DelayIcon,
   Info as InfoIcon,
-  Folder as FolderIcon,
   Receipt as ReceiptIcon,
   Assessment as AssessmentIcon,
+  LocationOn as LocationIcon,
 } from "@mui/icons-material";
+import { getSoftStageStatusChipSx, getSoftStatusChipSx } from "../../../utils/colorUtils";
 import { companiesSubscribedApi } from "../api";
 
 interface ProjectDetailsViewProps {
@@ -88,6 +88,26 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
   showMessage,
 }) => {
   const theme = useTheme();
+  // ألوان شرائح هادئة (soft) للاستخدام داخل تبويب الطلبات
+  const getSoftChipSx = (tone: 'primary' | 'info' | 'success' | 'warning' | 'error' | 'default') => {
+    const map: Record<string, { bg: string; text: string; border: string }> = {
+      primary: { bg: 'rgba(33,150,243,0.10)', text: '#1565c0', border: 'rgba(33,150,243,0.30)' },
+      info: { bg: 'rgba(33,150,243,0.10)', text: '#1565c0', border: 'rgba(33,150,243,0.30)' },
+      success: { bg: 'rgba(76,175,80,0.12)', text: '#2e7d32', border: 'rgba(76,175,80,0.30)' },
+      warning: { bg: 'rgba(255,152,0,0.12)', text: '#ef6c00', border: 'rgba(255,152,0,0.30)' },
+      error: { bg: 'rgba(244,67,54,0.12)', text: '#c62828', border: 'rgba(244,67,54,0.30)' },
+      default: { bg: 'rgba(158,158,158,0.12)', text: '#455a64', border: 'rgba(158,158,158,0.30)' },
+    };
+    const v = map[tone] || map.default;
+    return { bgcolor: v.bg, color: v.text, border: '1px solid', borderColor: v.border };
+  };
+  // تمييز نوع الطلب: ثقيل / خفيف / غير ذلك
+  const getRequestTypeTone = (typeValue: any): 'warning' | 'success' | 'info' => {
+    const t = (typeValue || '').toString().toLowerCase();
+    if (t.includes('ثقيل') || t.includes('ثقيلة') || t.includes('heavy')) return 'warning';
+    if (t.includes('خفيف') || t.includes('خفيفة') || t.includes('light')) return 'success';
+    return 'info';
+  };
   
   // State إدارة التابات
   const [activeTab, setActiveTab] = useState(0);
@@ -150,11 +170,19 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
 
   // State فريق العمل
   const [projectTeam, setProjectTeam] = useState<any[]>([]);
+  // فريق العمل الفعلي المستخرج من المراحل والملاحظات والطلبات
+  const [actualProjectTeam, setActualProjectTeam] = useState<Array<{
+    name: string;
+    openedStages: number;
+    closedStages: number;
+    notesRecorded: number;
+    requestsInserted: number;
+    requestsImplemented: number;
+    totalContributions: number;
+  }>>([]);
   const [teamLoading, setTeamLoading] = useState(false);
 
-  // State الأرشيف والتقارير المالية
-  const [archives, setArchives] = useState<any[]>([]);
-  const [archivesLoading, setArchivesLoading] = useState(false);
+  // State التقارير المالية
   const [financialReports, setFinancialReports] = useState<any>(null);
   const [financialReportsLoading, setFinancialReportsLoading] = useState(false);
 
@@ -585,9 +613,8 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
         }
         
         if (process.env.NODE_ENV === 'development') {
-          console.log('✅ تم تحديث حالة المصاريف مع إصلاح الترتيب:', {
-            dataLength: response.data?.length,
-            sorting_note: 'مرتبة حسب رقم الفاتورة (من الأحدث للأقدم)'
+          console.log('✅ تم تحديث حالة المصاريف:', {
+            dataLength: response.data?.length
           });
         }
       } else {
@@ -836,20 +863,72 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
     }
   };
 
-  // تحميل الأرشيف والملفات
-  const loadArchives = async () => {
-    try {
-      setArchivesLoading(true);
-      const response = await companiesSubscribedApi.getProjectArchives(project.id);
-      if (response.success) {
-        setArchives(response.data || []);
+  // بناء فريق العمل الفعلي من المراحل والملاحظات والطلبات
+  const buildActualProjectTeam = () => {
+    const nameToStats = new Map<string, {
+      name: string;
+      openedStages: number;
+      closedStages: number;
+      notesRecorded: number;
+      requestsInserted: number;
+      requestsImplemented: number;
+    }>();
+
+    // من المراحل الرئيسية
+    for (const stage of allMainStages || []) {
+      const openedBy = (stage.OpenBy || '').toString().trim();
+      const closedBy = (stage.ClosedBy || '').toString().trim();
+      if (openedBy) {
+        if (!nameToStats.has(openedBy)) nameToStats.set(openedBy, { name: openedBy, openedStages: 0, closedStages: 0, notesRecorded: 0, requestsInserted: 0, requestsImplemented: 0 });
+        nameToStats.get(openedBy)!.openedStages += 1;
       }
-    } catch (error: any) {
-      console.error("خطأ في تحميل الأرشيف:", error);
-    } finally {
-      setArchivesLoading(false);
+      if (closedBy) {
+        if (!nameToStats.has(closedBy)) nameToStats.set(closedBy, { name: closedBy, openedStages: 0, closedStages: 0, notesRecorded: 0, requestsInserted: 0, requestsImplemented: 0 });
+        nameToStats.get(closedBy)!.closedStages += 1;
+      }
     }
+
+    // من الملاحظات لكل مرحلة
+    Object.keys(stageNotes || {}).forEach((key) => {
+      const notes = stageNotes[Number(key)] || [];
+      for (const note of notes) {
+        const recordedBy = (note.RecordedBy || '').toString().trim();
+        if (recordedBy) {
+          if (!nameToStats.has(recordedBy)) nameToStats.set(recordedBy, { name: recordedBy, openedStages: 0, closedStages: 0, notesRecorded: 0, requestsInserted: 0, requestsImplemented: 0 });
+          nameToStats.get(recordedBy)!.notesRecorded += 1;
+        }
+      }
+    });
+
+    // من الطلبات
+    for (const req of requests || []) {
+      const insertBy = (req.InsertBy || '').toString().trim();
+      const implementedBy = (req.Implementedby || '').toString().trim();
+      if (insertBy) {
+        if (!nameToStats.has(insertBy)) nameToStats.set(insertBy, { name: insertBy, openedStages: 0, closedStages: 0, notesRecorded: 0, requestsInserted: 0, requestsImplemented: 0 });
+        nameToStats.get(insertBy)!.requestsInserted += 1;
+      }
+      if (implementedBy) {
+        if (!nameToStats.has(implementedBy)) nameToStats.set(implementedBy, { name: implementedBy, openedStages: 0, closedStages: 0, notesRecorded: 0, requestsInserted: 0, requestsImplemented: 0 });
+        nameToStats.get(implementedBy)!.requestsImplemented += 1;
+      }
+    }
+
+    const members = Array.from(nameToStats.values()).map(m => ({
+      ...m,
+      totalContributions: m.openedStages + m.closedStages + m.notesRecorded + m.requestsInserted + m.requestsImplemented,
+    }))
+    .filter(m => m.totalContributions > 0)
+    .sort((a, b) => b.totalContributions - a.totalContributions || a.name.localeCompare(b.name));
+
+    setActualProjectTeam(members);
   };
+
+  useEffect(() => {
+    buildActualProjectTeam();
+  }, [allMainStages, stageNotes, requests]);
+
+  // تم إزالة تبويب الأرشيف والملفات ووظائفه
 
   // تحميل التقارير المالية
   const loadFinancialReports = async () => {
@@ -907,7 +986,6 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
     setRevenues([]);
     setReturns([]);
     setRequests([]);
-    setArchives([]);
     setFinancialReports(null);
     setProjectTeam([]);
     
@@ -966,13 +1044,10 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
       case 2: // الطلبات
         loadRequests(requestsPage);
         break;
-      case 3: // الأرشيف والملفات
-        loadArchives();
-        break;
-      case 4: // فريق العمل
+      case 3: // فريق العمل
         loadProjectTeam();
         break;
-      case 5: // التقارير المالية
+      case 4: // التقارير المالية
         loadFinancialReports();
         break;
       default:
@@ -992,8 +1067,30 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
               {project.Nameproject}
             </Typography>
             <Box sx={{ mt: 2 }}>
-              <Typography variant="body1" sx={{ mb: 1 }}>
-                <strong>📍 الموقع:</strong> {project.LocationProject || 'غير محدد'}
+              <Typography variant="body1" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <strong>📍 الموقع:</strong>
+                {(() => {
+                  const value = project.LocationProject as string | undefined;
+                  if (!value || !String(value).trim()) return 'غير محدد';
+                  const match = String(value).match(/https?:\/\/[^\s]+/);
+                  if (match) {
+                    const url = match[0];
+                    return (
+                      <Button
+                        component="a"
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        variant="outlined"
+                        size="small"
+                        startIcon={<LocationIcon />}
+                      >
+                        فتح في خرائط Google
+                      </Button>
+                    );
+                  }
+                  return value;
+                })()}
               </Typography>
               <Typography variant="body1" sx={{ mb: 1 }}>
                 <strong>نوع العقد:</strong> {project.TypeOFContract || 'غير محدد'}
@@ -1153,8 +1250,8 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <Chip 
                     label={stage.Done === 'true' ? 'مكتملة' : 'قيد التنفيذ'}
-                    color={stage.Done === 'true' ? 'success' : 'warning'}
                     size="small"
+                    sx={getSoftStageStatusChipSx(stage.Done === 'true', Boolean(stage.Difference && stage.Difference > 0))}
                   />
                   {stage.Difference && stage.Difference > 0 && (
                     <Chip 
@@ -1250,8 +1347,8 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <Chip 
                                       label={subStage.Done === 'true' ? 'مكتملة' : 'قيد التنفيذ'}
-                                      color={subStage.Done === 'true' ? 'success' : 'warning'}
                                       size="small"
+                                      sx={getSoftStageStatusChipSx(subStage.Done === 'true', false)}
                                     />
                                     </Box>
                                   </ListItem>
@@ -1259,23 +1356,7 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
                               </List>
 
                               {/* معلومات الصفحة المحسنة */}
-                              <Box sx={{ 
-                                mt: 2, 
-                                p: 1.5, 
-                                backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'grey.50', 
-                                borderRadius: 1, 
-                                border: '1px solid', 
-                                borderColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'grey.200' 
-                              }}>
-                                <Typography variant="caption" sx={{ 
-                                  display: 'block', 
-                                  textAlign: 'center', 
-                                  fontWeight: 'medium',
-                                  color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.8)' : 'text.secondary'
-                                }}>
-                                  عرض {subStages[stageUniqueId].length} مرحلة فرعية
-                                </Typography>
-                              </Box>
+                              {/* تمت إزالة عرض عدد المراحل الفرعية بناءً على طلب المستخدم */}
 
                               {/* أزرار التنقل الذكية - عرض الصفحات الفعلية فقط */}
                               {(subStagesTotalPages[stageUniqueId] || 1) > 1 && (
@@ -1305,9 +1386,7 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
                                       }
                                     }}
                                   />
-                                  <Typography variant="caption" color="text.secondary" sx={{ ml: 2, alignSelf: 'center' }}>
-                                    {subStagesTotalPages[stageUniqueId] || 1} صفحة بها بيانات
-                                  </Typography>
+
                                 </Box>
                               )}
                             </>
@@ -1365,14 +1444,14 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
                                     {note.countdayDelay ? (
                                       <Chip 
                                         label={`${note.countdayDelay} يوم`}
-                                        color="error"
                                         size="small"
+                                        sx={getSoftStageStatusChipSx(false, true)}
                                       />
                                     ) : (
                                       <Chip 
                                         label="لا يوجد تأخير"
-                                        color="success"
                                         size="small"
+                                        sx={getSoftStageStatusChipSx(true, false)}
                                       />
                                     )}
                                   </TableCell>
@@ -1462,9 +1541,7 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
               <Typography variant="h6">
                 💰 المصروفات
               </Typography>
-              <Typography variant="caption" color="text.secondary">
-                (مرتبة حسب رقم الفاتورة)
-              </Typography>
+              
             </Box>
             {expenses.length > 0 && (
               <Chip 
@@ -1482,8 +1559,8 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
             <Typography sx={{ ml: 2 }}>جاري تحميل المصروفات...</Typography>
           </Box>
         ) : expenses.length > 0 ? (
-          <TableContainer>
-            <Table>
+          <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 700 }}>
               <TableHead>
                 <TableRow>
                   <TableCell><strong>📋 رقم الفاتورة ↓</strong></TableCell>
@@ -1573,8 +1650,8 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
             <Typography sx={{ ml: 2 }}>جاري تحميل العهد...</Typography>
           </Box>
         ) : revenues.length > 0 ? (
-          <TableContainer>
-            <Table>
+          <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 700 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>المبلغ</TableCell>
@@ -1655,8 +1732,8 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
             <Typography sx={{ ml: 2 }}>جاري تحميل المرتجعات...</Typography>
           </Box>
         ) : returns.length > 0 ? (
-          <TableContainer>
-            <Table>
+          <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 700 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>رقم المرتجع</TableCell>
@@ -1711,24 +1788,24 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
             <Typography variant="h6" sx={{ mb: 0.5 }}>
               📋 جميع الطلبات والتحديثات
             </Typography>
-            <Typography variant="caption" color="text.secondary">
-              (طريقة موحدة | RequestsID ↓, Date ↓)
-            </Typography>
+            
           </Box>
           {requests.length > 0 && (
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Chip 
                 label={`صفحة ${requestsPage} من ${requestsTotalPages}`}
-                color="primary" 
                 size="small"
+                variant="outlined"
+                sx={getSoftChipSx('primary')}
               />
               <Chip 
                 label={(requestsTotalCount && requestsTotalCount > 0) ? 
                   `${((requestsPage - 1) * 10) + 1}-${Math.min(requestsPage * 10, requestsTotalCount)} من ${requestsTotalCount} طلب` : 
                   requests.length > 0 ? `${requests.length} طلب في هذه الصفحة` : 'لا توجد طلبات'
                 }
-                color="success" 
                 size="small"
+                variant="outlined"
+                sx={getSoftChipSx('success')}
               />
             </Box>
           )}
@@ -1739,15 +1816,12 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
             <Typography sx={{ ml: 2 }}>جاري تحميل الطلبات...</Typography>
           </Box>
         ) : requests.length > 0 ? (
-          <TableContainer>
-            <Table>
+          <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 700 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>
                     <strong>🔢 رقم الطلب ↓</strong>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                      (ترتيب أساسي)
-                    </Typography>
                   </TableCell>
                   <TableCell>نوع الطلب</TableCell>
                   <TableCell>البيانات</TableCell>
@@ -1756,9 +1830,6 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
                   <TableCell>المُنفذ</TableCell>
                   <TableCell>
                     <strong>📅 تاريخ الإدخال ↓</strong>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                      (ترتيب ثانوي)
-                    </Typography>
                   </TableCell>
                   <TableCell>تاريخ التنفيذ</TableCell>
                   <TableCell>حالة الفحص</TableCell>
@@ -1771,8 +1842,9 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
                     <TableCell>
                       <Chip 
                         label={request.Type || 'طلب عام'} 
-                        color="info"
                         size="small"
+                        variant="outlined"
+                        sx={getSoftChipSx(getRequestTypeTone(request.Type))}
                       />
                     </TableCell>
                     <TableCell sx={{ maxWidth: 200 }}>
@@ -1783,8 +1855,13 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
                     <TableCell>
                       <Chip 
                         label={request.Done === 'true' ? 'منجز' : request.Done === 'false' ? 'قيد التنفيذ' : 'معلق'} 
-                        color={request.Done === 'true' ? 'success' : request.Done === 'false' ? 'warning' : 'default'}
                         size="small"
+                        variant="outlined"
+                        sx={request.Done === 'true' 
+                              ? getSoftChipSx('success') 
+                              : request.Done === 'false' 
+                                ? getSoftChipSx('warning') 
+                                : getSoftChipSx('default')}
                       />
                     </TableCell>
                     <TableCell>{request.InsertBy || 'غير محدد'}</TableCell>
@@ -1794,8 +1871,9 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
                     <TableCell>
                       <Chip 
                         label={request.checkorderout === 'true' ? 'تم الفحص' : 'لم يُفحص'} 
-                        color={request.checkorderout === 'true' ? 'success' : 'warning'}
                         size="small"
+                        variant="outlined"
+                        sx={request.checkorderout === 'true' ? getSoftChipSx('success') : getSoftChipSx('warning')}
                       />
                     </TableCell>
                   </TableRow>
@@ -1824,14 +1902,36 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
   return (
     <Box>
       {/* رأس الصفحة */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-          <IconButton onClick={onBack} color="primary">
-            <ArrowBackIcon />
-          </IconButton>
+      <Paper sx={{ p: 3, mb: 3, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h4" component="h1">
-            تفاصيل المشروع
+            📋 تفاصيل المشروع
           </Typography>
+          <Button
+            variant="contained"
+            startIcon={<ArrowBackIcon />}
+            onClick={onBack}
+            sx={{ 
+              backgroundColor: 'rgba(255, 255, 255, 0.15)',
+              color: 'white',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              borderRadius: '12px',
+              px: 3,
+              py: 1,
+              fontWeight: 600,
+              textTransform: 'none',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                border: '1px solid rgba(255, 255, 255, 0.4)',
+                transform: 'translateY(-2px)',
+                boxShadow: '0 6px 20px rgba(0,0,0,0.2)',
+              }
+            }}
+          >
+            العودة إلى المشاريع
+          </Button>
         </Box>
         
         {loading && (
@@ -1851,12 +1951,12 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
           onChange={(e, newValue) => setActiveTab(newValue)}
           variant="scrollable"
           scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab icon={<TimelineIcon />} label="المراحل والتطور" />
           <Tab icon={<MoneyIcon />} label="المالية" />
           <Tab icon={<RequestIcon />} label="الطلبات" />
-          <Tab icon={<ArchiveIcon />} label="الأرشيف والملفات" />
           <Tab icon={<GroupIcon />} label="فريق العمل" />
           <Tab icon={<AssessmentIcon />} label="التقارير المالية" />
         </Tabs>
@@ -1874,129 +1974,47 @@ const ProjectDetailsView: React.FC<ProjectDetailsViewProps> = ({
           {renderRequestsTab()}
         </TabPanel>
 
+        
+
         <TabPanel value={activeTab} index={3}>
-
-          
           <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>📁 الأرشيف والملفات</Typography>
-            {archivesLoading ? (
-              <CircularProgress />
-            ) : archives.length > 0 ? (
-              <TableContainer>
-                <Table>
-                                <TableHead>
-                <TableRow>
-                  <TableCell>رقم الأرشيف</TableCell>
-                  <TableCell>اسم المجلد</TableCell>
-                  <TableCell>تاريخ الإنشاء</TableCell>
-                  <TableCell>الملفات الفرعية</TableCell>
-                  <TableCell>حالة التفعيل الرئيسي</TableCell>
-                  <TableCell>حالة تفعيل الفرعي</TableCell>
-                  <TableCell>عدد الملفات</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {archives.map((archive, index) => {
-                  const childrenFiles = archive.children ? JSON.parse(archive.children) : [];
-                  const childrenCount = Array.isArray(childrenFiles) ? childrenFiles.length : 0;
-                  
-                  return (
-                    <TableRow key={archive.ArchivesID || index}>
-                      <TableCell>#{archive.ArchivesID || 'غير محدد'}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <FolderIcon color="primary" />
-                          {archive.FolderName || 'مجلد غير مسمى'}
-                        </Box>
-                      </TableCell>
-                      <TableCell>{archive.Date || 'غير محدد'}</TableCell>
-                      <TableCell>
-                        {childrenCount > 0 ? (
-                          <Chip 
-                            label={`${childrenCount} ملف`} 
-                            color="info"
-                            size="small"
-                          />
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            لا توجد ملفات
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={archive.ActivationHome === 'true' ? 'مُفعل' : 'غير مُفعل'} 
-                          color={archive.ActivationHome === 'true' ? 'success' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={archive.Activationchildren === 'true' ? 'مُفعل' : 'غير مُفعل'} 
-                          color={archive.Activationchildren === 'true' ? 'success' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="h6" color="primary">
-                          {childrenCount}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            ) : (
-              <Alert severity="info">لا توجد ملفات أرشيف مسجلة</Alert>
-            )}
-          </Paper>
-        </TabPanel>
-
-        <TabPanel value={activeTab} index={4}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>👥 فريق العمل</Typography>
-            {teamLoading ? (
-              <CircularProgress />
-            ) : projectTeam.length > 0 ? (
-              <TableContainer>
-                <Table>
+            <Typography variant="h6" gutterBottom>👥 فريق العمل الفعلي (من المراحل والملاحظات والطلبات)</Typography>
+            {actualProjectTeam.length > 0 ? (
+              <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
+                <Table size="small" sx={{ minWidth: 700 }}>
                   <TableHead>
                     <TableRow>
                       <TableCell>الاسم</TableCell>
-                      <TableCell>الوظيفة</TableCell>
-                      <TableCell>القسم</TableCell>
-                      <TableCell>الهاتف</TableCell>
-                      <TableCell>الحالة</TableCell>
+                      <TableCell align="center">الإجمالي</TableCell>
+                      <TableCell align="center">مراحل فُتحت</TableCell>
+                      <TableCell align="center">مراحل أُغلقت</TableCell>
+                      <TableCell align="center">ملاحظات</TableCell>
+                      <TableCell align="center">طلبات مدخلة</TableCell>
+                      <TableCell align="center">طلبات منفذة</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {projectTeam.map((member, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{member.userName || 'غير محدد'}</TableCell>
-                        <TableCell>{member.job || 'غير محدد'}</TableCell>
-                        <TableCell>{member.jobHOM || 'غير محدد'}</TableCell>
-                        <TableCell>{member.PhoneNumber || 'غير محدد'}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={member.Activation === 'true' ? 'نشط' : 'غير نشط'} 
-                            color={member.Activation === 'true' ? 'success' : 'default'}
-                            size="small"
-                          />
-                        </TableCell>
+                    {actualProjectTeam.map((m) => (
+                      <TableRow key={m.name}>
+                        <TableCell>{m.name}</TableCell>
+                        <TableCell align="center"><Chip label={m.totalContributions} color="primary" size="small" /></TableCell>
+                        <TableCell align="center">{m.openedStages}</TableCell>
+                        <TableCell align="center">{m.closedStages}</TableCell>
+                        <TableCell align="center">{m.notesRecorded}</TableCell>
+                        <TableCell align="center">{m.requestsInserted}</TableCell>
+                        <TableCell align="center">{m.requestsImplemented}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </TableContainer>
             ) : (
-              <Alert severity="info">لا يوجد أعضاء فريق مسجلين</Alert>
+              <Alert severity="info">لم يتم العثور على مساهمين فعليين من بيانات المراحل/الطلبات حتى الآن.</Alert>
             )}
           </Paper>
         </TabPanel>
 
-        <TabPanel value={activeTab} index={5}>
+        <TabPanel value={activeTab} index={4}>
           <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
             التقارير المالية الشاملة
           </Typography>

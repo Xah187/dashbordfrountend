@@ -1222,37 +1222,7 @@ export const useBranchEmployeesStats = (branchId: number) => {
 };
 
 // البحث الشامل في النظام - تفعيل API مغلق
-export const globalSearch = async (query: string, limit: number = 20) => {
-  console.log(`🔍 جاري البحث الشامل عن: "${query}" مع حد أقصى ${limit} نتائج`);
-  
-  try {
-    const response = await apiClient.get<ApiResponse<any>>(
-      `/companies/search/global?query=${encodeURIComponent(
-        query
-      )}&limit=${limit}`
-    );
-
-    console.log('📊 نتائج البحث الشامل:', response.data);
-
-    if (!response.data.success) {
-      throw new Error(response.data.message || "فشل في البحث");
-    }
-
-    const searchResults = response.data.data || {
-      companies: [],
-      branches: [],
-      projects: [],
-      employees: [],
-      total: 0,
-    };
-
-    console.log(`✅ تم العثور على ${searchResults.total} نتيجة إجمالية`);
-    return searchResults;
-  } catch (error) {
-    console.error("❌ خطأ في البحث الشامل:", error);
-    throw error;
-  }
-};
+// تم حذف البحث الشامل من الواجهة
 
 /**
  * جلب تفاصيل شركة محددة مع إحصائيات - تفعيل API مغلق

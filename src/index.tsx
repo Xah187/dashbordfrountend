@@ -7,6 +7,7 @@ import { QueryClientContextProvider, ReactQueryDevtools } from './contexts/Query
 import { ThemeProvider } from './contexts/ThemeContext';
 import { store } from './store';
 import App from './App';
+import { StyledEngineProvider } from '@mui/material/styles';
 // eslint-disable-next-line import/no-unresolved
 import './index.css';
 
@@ -25,11 +26,13 @@ root.render(
     <Provider store={store}>
       <QueryClientContextProvider>
         <BrowserRouter>
-          <ThemeProvider>
-            <App />
-            {/* ReactQueryDevtools مع التحميل الديناميكي */}
-            <ReactQueryDevtools />
-          </ThemeProvider>
+          <StyledEngineProvider injectFirst>
+            <ThemeProvider>
+              <App />
+              {/* ReactQueryDevtools مع التحميل الديناميكي */}
+              <ReactQueryDevtools />
+            </ThemeProvider>
+          </StyledEngineProvider>
         </BrowserRouter>
       </QueryClientContextProvider>
     </Provider>

@@ -184,6 +184,18 @@ export const companiesSubscribedApi = {
   // جلب مشاريع فرع محدد مع دعم عدد غير محدود من المشاريع
   async getBranchProjects(IDCompany:number,branchId: number, lastId = 0, limit = 10, includeDisabled = false): Promise<ApiResponse<Project[]>> {
     try {
+      // طبقة كاش خفيفة في الفرونت لتقليل الضغط (stale-while-revalidate بسيط)
+      const CACHE_TTL_MS = 2 * 60 * 1000; // دقيقتان
+      const cacheKey = `v2:branchProjects:${IDCompany}:${branchId}:${lastId}:${limit}:${includeDisabled ? 1 : 0}`;
+      try {
+        const cachedRaw = localStorage.getItem(cacheKey);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached && Array.isArray(cached.data) && typeof cached.ts === 'number' && (Date.now() - cached.ts) < CACHE_TTL_MS) {
+            return { success: true, data: cached.data };
+          }
+        }
+      } catch {}
       // نحاول جلب المشاريع على دفعات صغيرة متعددة لتجاوز قيد LIMIT 3
       const allProjects: any[] = [];
       let currentLastId = lastId;
@@ -193,24 +205,9 @@ export const companiesSubscribedApi = {
       const maxIterations = 100; // رفع الحد بشكل كبير لدعم عدد كبير من المشاريع
       let iterations = 0;
 
-      console.log('🚀 بدء تحميل المشاريع (نظام مفتوح):', {
-        branchId,
-        initialLastId: lastId,
-        targetSize,
-        batchSize,
-        maxIterations,
-        note: 'النظام يدعم عدد غير محدود من المشاريع'
-      });
-
       // جلب المشاريع على دفعات
       while (allProjects.length < targetSize && iterations < maxIterations) {
         iterations++;
-        
-        console.log(`📦 محاولة جلب الدفعة ${iterations}:`, {
-          currentLastId,
-          projectsCollected: allProjects.length,
-          targetRemaining: targetSize - allProjects.length
-        });
 
       const response = await apiClient.get("/brinshCompany/v2/BringProject", {
         params: {
@@ -224,26 +221,16 @@ export const companiesSubscribedApi = {
         });
 
         if (!response.data?.success) {
-          console.error('❌ خطأ في استجابة API:', response.data);
           break;
         }
 
         const batchProjects = response.data.data || [];
-        console.log('📦 دفعة مستلمة:', {
-          batchNumber: iterations,
-          batchSize: batchProjects.length,
-          currentLastId,
-          projectIds: batchProjects.map((p: any) => p.id),
-          projectNames: batchProjects.map((p: any) => p.Nameproject)
-        });
 
         if (batchProjects.length === 0) {
           consecutiveEmptyBatches++;
-          console.log(`⚠️ دفعة فارغة ${consecutiveEmptyBatches}:`, { currentLastId });
           
           // إذا حصلنا على 5 دفعات فارغة متتالية، نعتبر أننا وصلنا للنهاية
           if (consecutiveEmptyBatches >= 5) {
-            console.log('🔚 انتهاء البيانات - خمس دفعات فارغة متتالية');
             break;
           }
           
@@ -260,10 +247,7 @@ export const companiesSubscribedApi = {
           !allProjects.some(existingProject => existingProject.id === newProject.id)
         );
 
-        console.log(`✅ إضافة ${newProjects.length} مشروع جديد:`, {
-          newProjectIds: newProjects.map((p: any) => p.id),
-          totalAfterAdd: allProjects.length + newProjects.length
-        });
+
 
         allProjects.push(...newProjects);
 
@@ -274,11 +258,6 @@ export const companiesSubscribedApi = {
           
           // تأكد من أن last_id يتقدم
           if (newLastId <= currentLastId) {
-            console.log('⚠️ last_id لم يتقدم، زيادة يدوية:', {
-              oldLastId: currentLastId,
-              newLastId,
-              forcedIncrement: currentLastId + 5
-            });
             currentLastId = currentLastId + 5;
           } else {
             currentLastId = newLastId;
@@ -315,20 +294,18 @@ export const companiesSubscribedApi = {
       // قطع النتائج حسب الحجم المطلوب
       const finalProjects = filteredProjects.slice(0, targetSize);
 
-      console.log('📊 تم جلب المشاريع:', {
-        branchId,
-        totalProjectsFound: allProjects.length,
-        filteredProjectsCount: filteredProjects.length,
-        projectsReturned: finalProjects.length,
-        includeDisabled
-      });
+
       
+      // تخزين في الكاش
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({ data: finalProjects, ts: Date.now() }));
+      } catch {}
+
       return {
         success: true,
         data: finalProjects
       };
     } catch (error: any) {
-      console.error("خطأ في جلب مشاريع الفرع:", error);
       return {
         success: false,
         error: error.response?.data?.error || error.message || "حدث خطأ أثناء جلب مشاريع الفرع",
@@ -338,8 +315,130 @@ export const companiesSubscribedApi = {
 
   // جلب جميع مشاريع الفرع (بما في ذلك المُعطَّلة) لأغراض الإدارة
   async getAllBranchProjects(IDCompany:number,branchId: number, lastId = 0, limit = 50): Promise<ApiResponse<Project[]>> {
-    console.log('🔧 جلب جميع المشاريع (بما في ذلك المُعطَّلة) للفرع:', { branchId, lastId, limit });
     return this.getBranchProjects(IDCompany,branchId, lastId, limit, true); // includeDisabled = true
+  },
+
+  // البحث في مشاريع الفرع عبر الباك اند (v2/FilterProject)
+  async filterBranchProjects(
+    IDCompany: number,
+    branchId: number,
+    searchTerm: string
+  ): Promise<ApiResponse<Project[]>> {
+    try {
+      const response = await apiClient.get("/brinshCompany/v2/FilterProject", {
+        params: {
+          IDCompany: IDCompany,
+          IDCompanySub: branchId,
+          search: searchTerm
+        }
+      });
+
+      // الباك يُرجع success كنص رسالة، لذا نعتبر النجاح بناءً على حالة HTTP ووجود data
+      const data = response.data?.data || [];
+      return {
+        success: true,
+        data,
+        message: response.data?.success || response.data?.message
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || "حدث خطأ أثناء البحث في مشاريع الفرع",
+      };
+    }
+  },
+
+  // البحث داخل مشاريع الفرع على دفعات (batching) عبر BringProject ثم فلترة محلية
+  async searchBranchProjectsBatched(
+    IDCompany: number,
+    branchId: number,
+    searchTerm: string,
+    includeDisabled: boolean = false,
+    limitResults: number = 50
+  ): Promise<ApiResponse<Project[]>> {
+    try {
+      if (!searchTerm || !searchTerm.trim()) {
+        return { success: true, data: [] };
+      }
+
+      const term = searchTerm.toLowerCase();
+      const allMatched: any[] = [];
+      let currentLastId = 0;
+      const batchSizeBackend = 3;
+      let consecutiveEmptyBatches = 0;
+      const maxIterations = 1000;
+      let iterations = 0;
+
+      while (allMatched.length < limitResults && iterations < maxIterations) {
+        iterations++;
+        const response = await apiClient.get("/brinshCompany/v2/BringProject", {
+          params: {
+            IDCompany: IDCompany,
+            IDcompanySub: branchId,
+            IDfinlty: currentLastId,
+            type: "cache",
+            kind: "all",
+            order: "ASC"
+          }
+        });
+
+        if (!response.data?.success) {
+          break;
+        }
+
+        const batchProjects = response.data?.data || [];
+        if (batchProjects.length === 0) {
+          consecutiveEmptyBatches++;
+          if (consecutiveEmptyBatches >= 5) break;
+          currentLastId += 5;
+          continue;
+        }
+
+        consecutiveEmptyBatches = 0;
+
+        // فلترة بالبحث ضمن الدفعة فقط
+        const filteredBatch = batchProjects.filter((p: any) => {
+          const matches = (
+            String(p.Nameproject || '').toLowerCase().includes(term) ||
+            String(p.TypeOFContract || '').toLowerCase().includes(term) ||
+            String(p.LocationProject || '').toLowerCase().includes(term) ||
+            String(p.Note || '').toLowerCase().includes(term) ||
+            (p.Referencenumber !== undefined && p.Referencenumber !== null && String(p.Referencenumber).toLowerCase().includes(term))
+          );
+          if (!matches) return false;
+          if (includeDisabled) return true;
+          const d = p.Disabled;
+          const isActive = d === true || d === 'true' || Number(d) === 1 || d === '1';
+          return isActive;
+        });
+
+        // دمج بدون تكرار
+        for (const proj of filteredBatch) {
+          if (!allMatched.some((x) => x.id === proj.id)) {
+            allMatched.push(proj);
+            if (allMatched.length >= limitResults) break;
+          }
+        }
+
+        // تحديث lastId للدفعة التالية
+        const lastProjectInBatch = batchProjects[batchProjects.length - 1];
+        const newLastId = lastProjectInBatch?.id ?? currentLastId;
+        currentLastId = newLastId <= currentLastId ? currentLastId + 5 : newLastId;
+
+        // حد أمان كبير
+        if (currentLastId > 1000000000) break;
+      }
+
+      return {
+        success: true,
+        data: allMatched.slice(0, limitResults)
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || "حدث خطأ أثناء البحث على دفعات في مشاريع الفرع",
+      };
+    }
   },
 
   // إنشاء مشروع جديد
@@ -361,11 +460,9 @@ export const companiesSubscribedApi = {
         Disabled: true  // true = نشط حسب البيانات الفعلية
       };
       
-      console.log('🚀 إنشاء مشروع جديد:', projectWithStatus);
       const response = await apiClient.post("/brinshCompany/project", projectWithStatus);
       return response.data;
     } catch (error: any) {
-      console.error("خطأ في إنشاء المشروع:", error);
       return {
         success: false,
         error: error.response?.data?.error || error.message || "حدث خطأ أثناء إنشاء المشروع",
@@ -377,7 +474,6 @@ export const companiesSubscribedApi = {
   async toggleProjectStatus(projectId: number, makeActive: boolean = true): Promise<ApiResponse<Project>> {
     try {
       const statusText = makeActive ? 'تفعيل' : 'تعطيل';
-      console.log(`🔄 ${statusText} المشروع:`, { projectId, makeActive });
       
       // في قاعدة البيانات الفعلية: true = نشط، false = معطل
       const response = await apiClient.put("/brinshCompany/projectUpdat", {
@@ -385,10 +481,8 @@ export const companiesSubscribedApi = {
         Disabled: makeActive ? true : false
       });
       
-      console.log(`✅ تم ${statusText} المشروع بنجاح:`, response.data);
       return response.data;
     } catch (error: any) {
-      console.error("خطأ في تغيير حالة المشروع:", error);
       return {
         success: false,
         error: error.response?.data?.error || error.message || "حدث خطأ أثناء تغيير حالة المشروع",
@@ -411,7 +505,6 @@ export const companiesSubscribedApi = {
       const response = await apiClient.put("/brinshCompany/projectUpdat", projectData);
       return response.data;
     } catch (error: any) {
-      console.error("خطأ في تحديث المشروع:", error);
       return {
         success: false,
         error: error.response?.data?.error || error.message || "حدث خطأ أثناء تحديث المشروع",
@@ -997,27 +1090,7 @@ export const companiesSubscribedApi = {
     }
   },
 
-  // البحث الشامل
-  async globalSearch(query: string, limit = 10): Promise<ApiResponse<{
-    companies: any[];
-    branches: any[];
-    projects: any[];
-    employees: any[];
-    total: number;
-  }>> {
-    try {
-      const response = await apiClient.get("/companies/search/global", {
-        params: { query, limit }
-      });
-      return response.data;
-    } catch (error: any) {
-      console.error("خطأ في البحث الشامل:", error);
-      return {
-        success: false,
-        error: error.response?.data?.error || error.message || "حدث خطأ أثناء البحث",
-      };
-    }
-  },
+  // تم حذف البحث الشامل من الواجهة
 
   // ================================
   // APIs تفاصيل المشروع المحسنة
@@ -1415,122 +1488,92 @@ export const companiesSubscribedApi = {
 
 
 
-  // جلب جميع الطلبات - طريقة موحدة بسيطة لجميع المشاريع
+  // جلب الطلبات وفق آلية الباك (v2) مع ترقيم lastID ودمج الحالات المفتوحة/المغلقة وأنواع مختلفة
   async getProjectDetailedRequests(projectId: number, page = 1, limit = 10): Promise<ApiResponse<any[]>> {
     try {
-      console.log('🔍 الطريقة الموحدة - جلب طلبات المشروع:', { projectId, page, limit });
-      
-      // الأنواع الأساسية الموحدة (بناءً على قاعدة البيانات الفعلية)
-      const requestTypes = [
-        "طلبات ثقيلة",    // من قاعدة البيانات الفعلية
-        "طلبات خفيفة",    // من قاعدة البيانات الفعلية
-        "مواد ثقيلة",     // من قاعدة البيانات الفعلية
-        "مواد خفيفة",     // من قاعدة البيانات الفعلية
-        "كهربائي",       // من قاعدة البيانات الفعلية
-        "سباك",         // من قاعدة البيانات الفعلية
-        "حداد"          // إضافة حداد كنوع أساسي
-      ];
-      
-      console.log('📋 استخدام 7 أنواع موحدة:', requestTypes);
-      
-      let allCombinedRequests: any[] = [];
-      const foundTypes: string[] = [];
-      
-      // جلب الطلبات لكل نوع وتجميعها
-      for (const requestType of requestTypes) {
-        try {
-          console.log(`🔍 جلب النوع: "${requestType}"`);
-          
-          const response = await apiClient.get("/brinshCompany/BringDataRequests", {
-            params: { 
-              ProjectID: projectId,
-              Type: requestType
-            }
-          });
-          
-          if (response.data?.success === "تمت العملية بنجاح" && response.data?.data?.length > 0) {
-            const typeRequests = response.data.data;
-            
-            // تصفية التكرارات بناءً على RequestsID
-            const newRequests = typeRequests.filter((newReq: any) => 
-              !allCombinedRequests.some((existingReq: any) => existingReq.RequestsID === newReq.RequestsID)
-            );
-            
-            allCombinedRequests.push(...newRequests);
-            foundTypes.push(requestType);
-            
-            console.log(`✅ "${requestType}": ${typeRequests.length} طلب، جديد: ${newRequests.length}`);
-          } else {
-            console.log(`⚪ لا توجد طلبات من النوع "${requestType}"`);
-          }
-        } catch (error: any) {
-          console.warn(`⚠️ فشل جلب النوع "${requestType}":`, error.message);
-        }
-      }
-      
-      if (allCombinedRequests.length > 0) {
-        console.log('🎉 تم تجميع الطلبات بالطريقة الموحدة!', {
-          totalRequests: allCombinedRequests.length,
-          foundTypes: foundTypes,
-          uniqueRequestIDs: Array.from(new Set(allCombinedRequests.map((r: any) => r.RequestsID))).length,
-          projectId: projectId
+      console.log('🔍 v2 - جلب طلبات المشروع بالترقيم:', { projectId, page, limit });
+      const pageSizeBackend = 10; // حد الباك لكل نداء
+
+      // 1) جلب أعداد الطلبات من الباك (V2)
+      let totalCount = 0;
+      try {
+        const countRes = await apiClient.get('/brinshCompany/v2/BringCountRequsts', {
+          params: { ProjectID: projectId, type: 'part' }
         });
-        
-        // ترتيب البيانات (RequestsID تنازلي، ثم التاريخ تنازلي)
-        const sortedRequests = allCombinedRequests.sort((a: any, b: any) => {
-          if (b.RequestsID !== a.RequestsID) {
-            return b.RequestsID - a.RequestsID;
+        const open = Number(countRes.data?.data?.Open || 0);
+        const close = Number(countRes.data?.data?.Close || 0);
+        totalCount = open + close;
+      } catch (e) {
+        console.warn('⚠️ فشل جلب الأعداد الإجمالية، سيتم التقدير لاحقاً:', (e as any)?.message);
+      }
+
+      const targetEnd = page * limit;
+      const buffers: any[] = [];
+      let lastIdTrue = 0;  // للمفتوحة
+      let lastIdFalse = 0; // للمغلقة
+      let moreTrue = true;
+      let moreFalse = true;
+
+      // 2) نجلب على دفعات متناوبة من المفتوحة والمغلقة حتى نغطي الصفحة المطلوبة
+      const fetchBatch = async (doneVal: 'true' | 'false') => {
+        const lastID = doneVal === 'true' ? lastIdTrue : lastIdFalse;
+        const resp = await apiClient.get('/brinshCompany/v2/BringDataRequests', {
+          params: {
+            ProjectID: projectId,
+            Type: '',            // فارغ ليشمل كل الأنواع (يتحول إلى LIKE '%%')
+            kind: 'part',
+            Done: doneVal,
+            lastID: lastID,
           }
+        });
+        const data: any[] = resp.data?.data || [];
+        if (data.length > 0) {
+          buffers.push(...data);
+          const minId = data[data.length - 1]?.RequestsID || lastID;
+          if (doneVal === 'true') lastIdTrue = minId; else lastIdFalse = minId;
+          if (data.length < pageSizeBackend) {
+            if (doneVal === 'true') moreTrue = false; else moreFalse = false;
+          }
+        } else {
+          if (doneVal === 'true') moreTrue = false; else moreFalse = false;
+        }
+      };
+
+      // نجلب بالتناوب حتى نصل إلى الحد المطلوب أو تنفد البيانات
+      while ((buffers.length < targetEnd) && (moreTrue || moreFalse)) {
+        if (moreTrue) await fetchBatch('true');
+        if (buffers.length >= targetEnd) break;
+        if (moreFalse) await fetchBatch('false');
+      }
+
+      // دمج وترتيب حسب RequestsID تنازلي ثم التاريخ
+      const sorted = buffers
+        .sort((a: any, b: any) => {
+          if (b.RequestsID !== a.RequestsID) return b.RequestsID - a.RequestsID;
           const dateA = new Date(a.Date || a.DateTime || 0).getTime();
           const dateB = new Date(b.Date || b.DateTime || 0).getTime();
           return dateB - dateA;
         });
-        
-        // تطبيق pagination
-        const startIndex = (page - 1) * limit;
-        const endIndex = startIndex + limit;
-        const paginatedRequests = sortedRequests.slice(startIndex, endIndex);
-        
-        console.log('📊 النتيجة النهائية الموحدة:', {
-          totalRequests: sortedRequests.length,
-          pageRequests: paginatedRequests.length,
-          totalPages: Math.ceil(sortedRequests.length / limit),
-          currentPage: page,
-          foundTypes: foundTypes,
-          pageRange: `${startIndex + 1}-${Math.min(endIndex, sortedRequests.length)} من ${sortedRequests.length}`
-        });
-        
-        return {
-          success: true,
-          data: paginatedRequests,
-          totalCount: sortedRequests.length,
-          totalPages: Math.ceil(sortedRequests.length / limit),
-          currentPage: page,
-          foundTypes: foundTypes,
-          method: 'unified'
-        } as any;
-      }
-      
-      console.warn('💔 لم يتم العثور على أي طلبات للمشروع:', projectId, {
-        searchedTypes: requestTypes,
-        note: 'الطريقة الموحدة - لا توجد طلبات من أي نوع'
-      });
-      
+
+      // 3) حساب الصفحة المطلوبة
+      const startIndex = (page - 1) * limit;
+      const pageData = sorted.slice(startIndex, startIndex + limit);
+
+      const totalPages = totalCount > 0 ? Math.max(1, Math.ceil(totalCount / limit)) : undefined;
+
       return {
         success: true,
-        data: [],
-        totalCount: 0,
-        totalPages: 0,
-        error: `لا توجد طلبات مسجلة للمشروع ${projectId}`,
-        searchedTypes: requestTypes,
-        method: 'unified'
+        data: pageData,
+        totalCount: totalCount || sorted.length,
+        totalPages: totalPages || Math.max(1, Math.ceil(sorted.length / limit)),
+        currentPage: page,
+        method: 'v2-merged'
       } as any;
-      
     } catch (error: any) {
-      console.error("💥 خطأ في الطريقة الموحدة لجلب الطلبات:", error);
+      console.error('💥 خطأ في جلب طلبات v2:', error);
       return {
         success: false,
-        error: error.response?.data?.error || error.message || "حدث خطأ أثناء جلب الطلبات",
+        error: error.response?.data?.error || error.message || 'حدث خطأ أثناء جلب الطلبات',
         data: []
       };
     }
@@ -2277,6 +2320,94 @@ export const companiesSubscribedApi = {
       return {
         success: false,
         error: error.message || "حدث خطأ أثناء البحث في الشركات",
+      };
+    }
+  },
+
+  // جلب العدد الفعلي للمشاريع لكل فرع (ميزة منفصلة)
+  async getBranchProjectsActualCount(IDCompany: number, branchId: number): Promise<ApiResponse<{ count: number }>> {
+    try {
+      // جلب جميع المشاريع بدون تحديد حد أقصى
+      const allProjects: any[] = [];
+      let currentLastId = 0;
+      const batchSize = 3; // حجم الدفعة الواحدة من الـ backend
+      let consecutiveEmptyBatches = 0;
+      const maxIterations = 500; // رفع الحد بشكل كبير لدعم عدد كبير من المشاريع
+      let iterations = 0;
+
+      // جلب المشاريع على دفعات حتى نصل للنهاية
+      while (iterations < maxIterations) {
+        iterations++;
+
+        const response = await apiClient.get("/brinshCompany/v2/BringProject", {
+          params: {
+            IDCompany: IDCompany,
+            IDcompanySub: branchId,
+            IDfinlty: currentLastId,
+            type: "cache",
+            kind: "all",
+            order: "ASC"
+          }
+        });
+
+        if (!response.data?.success) {
+          break;
+        }
+
+        const batchProjects = response.data.data || [];
+
+        if (batchProjects.length === 0) {
+          consecutiveEmptyBatches++;
+          
+          // إذا حصلنا على 5 دفعات فارغة متتالية، نعتبر أننا وصلنا للنهاية
+          if (consecutiveEmptyBatches >= 5) {
+            break;
+          }
+          
+          // جرب زيادة last_id بقفزة أكبر في حالة وجود فجوات في البيانات
+          currentLastId += 5;
+          continue;
+        }
+
+        // إعادة تعيين عداد الدفعات الفارغة
+        consecutiveEmptyBatches = 0;
+
+        // إضافة المشاريع الجديدة (تجنب التكرار)
+        const newProjects = batchProjects.filter((newProject: any) => 
+          !allProjects.some(existingProject => existingProject.id === newProject.id)
+        );
+
+        allProjects.push(...newProjects);
+
+        // تحديث currentLastId لآخر مشروع في الدفعة
+        if (batchProjects.length > 0) {
+          const lastProjectInBatch = batchProjects[batchProjects.length - 1];
+          const newLastId = lastProjectInBatch.id;
+          
+          // تأكد من أن last_id يتقدم
+          if (newLastId <= currentLastId) {
+            currentLastId = currentLastId + 5;
+          } else {
+            currentLastId = newLastId;
+          }
+        }
+
+        // حماية من الحلقة اللانهائية - حد مرن يمكن رفعه حسب الحاجة
+        if (allProjects.length >= 10000) {
+          break;
+        }
+      }
+
+      const actualCount = allProjects.length;
+      
+      return {
+        success: true,
+        data: { count: actualCount }
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || "حدث خطأ أثناء جلب العدد الفعلي للمشاريع للفرع",
       };
     }
   },

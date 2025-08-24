@@ -47,12 +47,15 @@ import {
   Clear as ClearIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
+  ArrowBack as ArrowBackIcon,
 } from "@mui/icons-material";
 import { companiesSubscribedApi, Company, Branch } from "../api";
+import { getSoftStatusChipSx } from "../../../utils/colorUtils";
 
 interface BranchesViewProps {
   company: Company;
   onBranchSelect: (branch: Branch) => void;
+  onBack: () => void;
   onLoading: (loading: boolean) => void;
   onError: (error: string | null) => void;
   showMessage: (message: string, severity?: 'success' | 'error' | 'warning' | 'info') => void;
@@ -61,6 +64,7 @@ interface BranchesViewProps {
 const BranchesView: React.FC<BranchesViewProps> = ({
   company,
   onBranchSelect,
+  onBack,
   onLoading,
   onError,
   showMessage,
@@ -73,6 +77,30 @@ const BranchesView: React.FC<BranchesViewProps> = ({
   const [pageLastIds, setPageLastIds] = useState<{[key: number]: number}>({1: 0});
   const [hasNextPage, setHasNextPage] = useState(false);
   const [localLoading, setLocalLoading] = useState(false);
+  
+  // State عدد المشاريع لكل فرع
+  const [branchProjectsCount, setBranchProjectsCount] = useState<{[key: number]: number}>({});
+  const [projectsCountLoading, setProjectsCountLoading] = useState<{[key: number]: boolean}>({});
+  // تخزين محلي لعدد المشاريع لتقليل التأخير وإظهار قيمة سريعة
+  const CACHE_TTL_MS = 10 * 60 * 1000; // 10 دقائق
+  const buildCacheKey = (branchId: number) => `branchProjectsCount:${company.id}:${branchId}`;
+  const readCachedBranchCount = (branchId: number): number | null => {
+    try {
+      const raw = localStorage.getItem(buildCacheKey(branchId));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.count !== 'number' || typeof parsed.ts !== 'number') return null;
+      if (Date.now() - parsed.ts > CACHE_TTL_MS) return null;
+      return parsed.count;
+    } catch {
+      return null;
+    }
+  };
+  const writeCachedBranchCount = (branchId: number, count: number) => {
+    try {
+      localStorage.setItem(buildCacheKey(branchId), JSON.stringify({ count, ts: Date.now() }));
+    } catch {}
+  };
   
   // State البحث المحسن مع نظام الصفحات
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -150,11 +178,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({
     setIsSearchMode(true);
     
     try {
-      console.log('🔍 تنفيذ البحث الشامل في الفروع:', {
-        searchTerm: term,
-        filters,
-        companyId: company.id
-      });
+
 
       const filtersObject = {
         manager: filters.manager || undefined,
@@ -180,12 +204,11 @@ const BranchesView: React.FC<BranchesViewProps> = ({
           hasMore: false
         });
 
-        console.log('نتائج البحث الشامل للفروع:', {
-          searchTerm: term,
-          filtersApplied: filters,
-          resultsFound: results.length,
-          branchNames: results.map(b => b.name)
+        // جلب العدد الفعلي للمشاريع لنتائج البحث
+        results.forEach((branch: Branch) => {
+          loadBranchProjectsCount(branch.id);
         });
+
       } else {
         throw new Error(response.error || "حدث خطأ أثناء البحث");
       }
@@ -237,6 +260,13 @@ const BranchesView: React.FC<BranchesViewProps> = ({
       setIsSearchMode(false);
       setSearchResults([]);
       setSearchSummary(null);
+      
+      // إعادة تحميل العدد الفعلي للمشاريع للفروع المعروضة حالياً
+      branches.forEach((branch: Branch) => {
+        if (branchProjectsCount[branch.id] === undefined) {
+          loadBranchProjectsCount(branch.id);
+        }
+      });
     } else {
       debouncedSearch(searchTerm, newFilters);
     }
@@ -256,6 +286,13 @@ const BranchesView: React.FC<BranchesViewProps> = ({
     
     if (branches.length === 0) {
       loadBranches(1, true);
+    } else {
+      // إعادة تحميل العدد الفعلي للمشاريع للفروع المعروضة حالياً
+      branches.forEach((branch: Branch) => {
+        if (branchProjectsCount[branch.id] === undefined) {
+          loadBranchProjectsCount(branch.id);
+        }
+      });
     }
   };
 
@@ -276,14 +313,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({
 
       const lastIdForPage = pageLastIds[page] || 0;
 
-      console.log('🚀 تحميل الفروع:', {
-        companyId: company.id,
-        companyName: company.name,
-        requestedPage: page,
-        lastIdForPage,
-        targetLimit: 10,
-        resetPagination
-      });
+
 
       const response = await companiesSubscribedApi.getCompanyBranches(
         company.id,
@@ -294,13 +324,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({
       if (response.success) {
         const newBranches = response.data || [];
         
-        console.log('البيانات المستلمة:', {
-          page,
-          lastIdUsed: lastIdForPage,
-          newBranchesCount: newBranches.length,
-          branchNames: newBranches.map(b => b.name),
-          branchIds: newBranches.map(b => b.id)
-        });
+
         
           setBranches(newBranches);
         setCurrentPage(page);
@@ -330,11 +354,22 @@ const BranchesView: React.FC<BranchesViewProps> = ({
           }
         }
         
-        console.log('📈 تحديث حالة الفروع:', {
-          currentPage: page,
-          totalPages: newBranches.length === 10 ? Math.max(totalPages, page + 1) : Math.max(page, totalPages),
-          hasNextPage: newBranches.length === 10,
-          systemType: 'نظام مفتوح - يدعم عدد غير محدود من الفروع'
+
+        
+        // حقن القيم المخزنة مؤقتاً فوراً إن وجدت لعرض سريع
+        const cachedCountsUpdate: {[key:number]: number} = {};
+        newBranches.forEach((branch: Branch) => {
+          const cached = readCachedBranchCount(branch.id);
+          if (cached !== null) {
+            cachedCountsUpdate[branch.id] = cached;
+          }
+        });
+        if (Object.keys(cachedCountsUpdate).length > 0) {
+          setBranchProjectsCount(prev => ({ ...prev, ...cachedCountsUpdate }));
+        }
+        // جلب العدد الفعلي للمشاريع لكل فرع جديد بشكل متدرّج لتخفيف الحمل
+        newBranches.forEach((branch: Branch, idx: number) => {
+          setTimeout(() => loadBranchProjectsCount(branch.id), idx * 200);
         });
       } else {
         throw new Error(response.error || "حدث خطأ أثناء تحميل الفروع");
@@ -353,20 +388,53 @@ const BranchesView: React.FC<BranchesViewProps> = ({
     }
   };
 
+  // جلب العدد الفعلي للمشاريع لكل فرع
+  const loadBranchProjectsCount = async (branchId: number) => {
+    try {
+      // تجنب إعادة التحميل إذا كان موجود بالفعل
+      if (branchProjectsCount[branchId] !== undefined) {
+        return;
+      }
+
+      setProjectsCountLoading(prev => ({ ...prev, [branchId]: true }));
+      
+      // استخدام API الجديد لجلب العدد الفعلي
+      const response = await companiesSubscribedApi.getBranchProjectsActualCount(company.id, branchId);
+      
+      if (response && response.success) {
+        setBranchProjectsCount(prev => ({
+          ...prev,
+          [branchId]: response.data?.count || 0
+        }));
+        writeCachedBranchCount(branchId, response.data?.count || 0);
+      } else {
+        // في حالة الفشل، نضع 0 كقيمة افتراضية
+        setBranchProjectsCount(prev => ({
+          ...prev,
+          [branchId]: 0
+        }));
+        writeCachedBranchCount(branchId, 0);
+      }
+    } catch (error: any) {
+      // في حالة الخطأ، نضع 0 كقيمة افتراضية
+      setBranchProjectsCount(prev => ({
+        ...prev,
+        [branchId]: 0
+      }));
+    } finally {
+      setProjectsCountLoading(prev => ({ ...prev, [branchId]: false }));
+    }
+  };
+
   // التنقل بين الصفحات المحسن
   const handlePageChange = (event: React.ChangeEvent<unknown>, page: number) => {
     if (!localLoading && page !== currentPage && page >= 1) {
-      console.log('📄 تغيير الصفحة:', {
-        fromPage: currentPage,
-        toPage: page,
-        availablePageLastIds: Object.keys(pageLastIds),
-        targetPageLastId: pageLastIds[page]
-      });
+
       
       if (page === 1 || pageLastIds[page] !== undefined) {
         loadBranches(page);
     } else {
-        console.log('🔢 حساب last_id للصفحة المتقدمة:', page);
+
         
         let nearestPage = 1;
         let nearestLastId = 0;
@@ -387,17 +455,35 @@ const BranchesView: React.FC<BranchesViewProps> = ({
         
         loadBranches(page);
       }
+      
+      // تحديث العدد الفعلي للمشاريع للفروع في الصفحة الجديدة (حقن مخزّن ثم تحديث متدرّج)
+      const startIndex = (page - 1) * 10;
+      const endIndex = startIndex + 10;
+      const pageBranches = branches.slice(startIndex, endIndex);
+      const cachedUpdate: {[key:number]: number} = {};
+      pageBranches.forEach((branch: Branch) => {
+        if (branchProjectsCount[branch.id] === undefined) {
+          const cached = readCachedBranchCount(branch.id);
+          if (cached !== null) {
+            cachedUpdate[branch.id] = cached;
+          }
+        }
+      });
+      if (Object.keys(cachedUpdate).length > 0) {
+        setBranchProjectsCount(prev => ({ ...prev, ...cachedUpdate }));
+      }
+      pageBranches.forEach((branch: Branch, idx: number) => {
+        if (branchProjectsCount[branch.id] === undefined) {
+          setTimeout(() => loadBranchProjectsCount(branch.id), idx * 200);
+        }
+      });
     }
   };
 
   // فتح نافذة إضافة/تعديل فرع
   const openBranchDialog = (branch?: Branch) => {
     if (branch) {
-      console.log('🔧 فتح نموذج التعديل للفرع:', {
-        branchId: branch.id,
-        branchName: branch.name,
-        originalData: branch
-      });
+
       
       setEditingBranch(branch);
       setFormData({
@@ -408,7 +494,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({
         phone: branch.phone || "",
       });
     } else {
-      console.log('➕ فتح نموذج إضافة فرع جديد');
+
       setEditingBranch(null);
       setFormData({
         name: "",
@@ -430,11 +516,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({
         return;
       }
 
-      console.log('💾 بدء عملية حفظ الفرع:', {
-        isEditing: !!editingBranch,
-        branchId: editingBranch?.id,
-        formData: formData
-      });
+
 
       onLoading(true);
       onError(null);
@@ -452,17 +534,17 @@ const BranchesView: React.FC<BranchesViewProps> = ({
       if (editingBranch) {
         // تحديث فرع موجود
         response = await companiesSubscribedApi.updateBranch(editingBranch.id, branchData);
-        console.log('📥 استجابة التحديث:', response);
+
       } else {
         // إضافة فرع جديد
         response = await companiesSubscribedApi.createBranch(company.id, branchData);
-        console.log('📥 استجابة الإضافة:', response);
+
       }
 
       if (response && response.success) {
         const successMessage = editingBranch ? "تم تحديث الفرع بنجاح" : "تم إضافة الفرع بنجاح";
         showMessage(successMessage, "success");
-        console.log('تمت العملية بنجاح:', successMessage);
+
         
         setDialogOpen(false);
         
@@ -471,6 +553,14 @@ const BranchesView: React.FC<BranchesViewProps> = ({
           performSearch(searchTerm, searchFilters);
         } else {
           loadBranches(currentPage);
+        }
+        
+        // إعادة تحميل العدد الفعلي للمشاريع للفروع الجديدة أو المحدثة
+        if (response.data) {
+          const branchId = response.data.id;
+          // إعادة تحميل العدد الفعلي للمشاريع للتأكد من دقة البيانات
+          delete branchProjectsCount[branchId];
+          loadBranchProjectsCount(branchId);
         }
       } else {
         const errorMessage = response?.error || "حدث خطأ غير معروف أثناء حفظ الفرع";
@@ -494,20 +584,16 @@ const BranchesView: React.FC<BranchesViewProps> = ({
       showMessage(`فشل في حفظ الفرع: ${errorMessage}`, "error");
     } finally {
       onLoading(false);
-      console.log('🏁 انتهاء عملية حفظ الفرع');
+
     }
   };
 
   // حذف فرع
   const handleDeleteBranch = async (branch: Branch) => {
-    console.log('🗑️ محاولة حذف الفرع:', {
-      branchId: branch.id,
-      branchName: branch.name,
-      companyId: company.id
-    });
+
 
     if (!window.confirm(`هل أنت متأكد من حذف فرع "${branch.name}"؟\n\nسيتم حذف جميع المشاريع المرتبطة به نهائياً.\n\nهذه العملية لا يمكن التراجع عنها.`)) {
-      console.log('❌ تم إلغاء عملية الحذف من قبل المستخدم');
+
       return;
     }
 
@@ -515,35 +601,44 @@ const BranchesView: React.FC<BranchesViewProps> = ({
       onLoading(true);
       onError(null);
       
-      console.log('📤 إرسال طلب الحذف للخادم...');
+
       const response = await companiesSubscribedApi.deleteBranch(branch.id);
 
-      console.log('📥 استجابة الخادم للحذف:', {
-        response,
-        success: response?.success,
-        error: response?.error,
-        message: response?.message
-      });
+
 
       if (response && response.success) {
         showMessage("تم حذف الفرع بنجاح", "success");
-        console.log('تم حذف الفرع بنجاح من الخادم');
+
         
         // تحديث العرض بناءً على النمط الحالي
         if (isSearchMode) {
-          console.log('في وضع البحث - إعادة تشغيل البحث');
+
           performSearch(searchTerm, searchFilters);
         } else {
-          console.log('في الوضع العادي - تحديث الصفحة');
+          
           const remainingBranches = branches.filter(b => b.id !== branch.id);
           
           if (remainingBranches.length === 0 && currentPage > 1) {
-            console.log('الصفحة فارغة، الانتقال للصفحة السابقة');
+
             loadBranches(currentPage - 1);
           } else {
-            console.log('إعادة تحميل الصفحة الحالية');
+
             loadBranches(currentPage);
           }
+          
+          // إزالة العدد الفعلي للمشاريع للفرع المحذوف
+          setBranchProjectsCount(prev => {
+            const newCounts = { ...prev };
+            delete newCounts[branch.id];
+            return newCounts;
+          });
+          
+          // إزالة حالة التحميل للفرع المحذوف
+          setProjectsCountLoading(prev => {
+            const newLoading = { ...prev };
+            delete newLoading[branch.id];
+            return newLoading;
+          });
         }
       } else {
         const errorMessage = response?.error || "حدث خطأ غير معروف أثناء حذف الفرع";
@@ -567,7 +662,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({
       showMessage(`❌ فشل في حذف الفرع: ${errorMessage}`, "error");
     } finally {
       onLoading(false);
-      console.log('🏁 انتهاء عملية الحذف');
+
     }
   };
 
@@ -585,22 +680,45 @@ const BranchesView: React.FC<BranchesViewProps> = ({
 
   // تحميل البيانات عند بداية التحميل
   useEffect(() => {
-    console.log('🔄 تغيير الشركة - إعادة تحميل البيانات:', {
-      companyId: company.id,
-      companyName: company.name,
-      systemType: 'نظام فروع محسن ومتكامل'
-    });
+
     setTotalPages(20);
     loadBranches(1, true);
   }, [company.id]);
 
   return (
     <Box>
-      {/* معلومات الشركة */}
+      {/* معلومات الشركة مع زر العودة */}
       <Paper sx={{ p: 3, mb: 3, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
-        <Typography variant="h5" gutterBottom>
-          🏢 فروع شركة: {company.name}
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+          <Typography variant="h5" gutterBottom>
+            🏢 فروع شركة: {company.name}
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<ArrowBackIcon />}
+            onClick={onBack}
+            sx={{ 
+              backgroundColor: 'rgba(255, 255, 255, 0.15)',
+              color: 'white',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              borderRadius: '12px',
+              px: 3,
+              py: 1,
+              fontWeight: 600,
+              textTransform: 'none',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                border: '1px solid rgba(255, 255, 255, 0.4)',
+                transform: 'translateY(-2px)',
+                boxShadow: '0 6px 20px rgba(0,0,0,0.2)',
+              }
+            }}
+          >
+            العودة إلى الشركات المشتركة
+          </Button>
+        </Box>
         <Box sx={{ display: 'flex', gap: 3, mt: 2, flexWrap: 'wrap' }}>
           <Typography variant="body2">
             🏭 الفروع: {company.branchesCount}/{company.branchesAllowed}
@@ -760,7 +878,18 @@ const BranchesView: React.FC<BranchesViewProps> = ({
           <Pagination
             count={searchTotalPages}
             page={searchCurrentPage}
-            onChange={(event, page) => setSearchCurrentPage(page)}
+            onChange={(event, page) => {
+              setSearchCurrentPage(page);
+              // جلب العدد الفعلي للمشاريع للفروع في الصفحة الجديدة
+              const startIndex = (page - 1) * 10;
+              const endIndex = startIndex + 10;
+              const pageBranches = searchResults.slice(startIndex, endIndex);
+              pageBranches.forEach((branch: Branch) => {
+                if (branchProjectsCount[branch.id] === undefined) {
+                  loadBranchProjectsCount(branch.id);
+                }
+              });
+            }}
             color="secondary"
             size="large"
             showFirstButton={false}
@@ -806,28 +935,29 @@ const BranchesView: React.FC<BranchesViewProps> = ({
               }
             }}
           />
-          <Typography variant="caption" color="text.secondary" sx={{ ml: 2, alignSelf: 'center' }}>
-            {totalPages} صفحة بها بيانات
-          </Typography>
+
         </Box>
       )}
 
       {/* قائمة الفروع */}
-      <TableContainer component={Paper} sx={{ mt: 2 }}>
-        <Table stickyHeader>
+      <TableContainer component={Paper} sx={{ mt: 2, width: '100%', overflowX: 'auto' }}>
+        <Table stickyHeader size="small" sx={{ minWidth: 700 }}>
           <TableHead>
             <TableRow>
               <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }}>
                 الفرع
               </TableCell>
-              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }}>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white', display: { xs: 'none', sm: 'table-cell' } }}>
                 المدير
               </TableCell>
-              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }}>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white', display: { xs: 'none', md: 'table-cell' } }}>
                 العنوان
               </TableCell>
-              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }}>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white', display: { xs: 'none', md: 'table-cell' } }}>
                 الاتصال
+              </TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }} align="center">
+                المشاريع
               </TableCell>
               <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }} align="center">
                 الحالة
@@ -845,6 +975,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({
                   <TableCell><Skeleton variant="text" width="60%" /></TableCell>
                   <TableCell><Skeleton variant="text" width="70%" /></TableCell>
                   <TableCell><Skeleton variant="text" width="50%" /></TableCell>
+                  <TableCell><Skeleton variant="rectangular" width={60} height={24} /></TableCell>
                   <TableCell><Skeleton variant="rectangular" width={80} height={24} /></TableCell>
                   <TableCell><Skeleton variant="rectangular" width="100%" height={36} /></TableCell>
                 </TableRow>
@@ -871,14 +1002,11 @@ const BranchesView: React.FC<BranchesViewProps> = ({
                         <Typography variant="body1" fontWeight="medium">
                           {branch.name}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {branch.employeesCount || 0} موظف
-                        </Typography>
                       </Box>
                     </Box>
                   </TableCell>
-                  <TableCell>{branch.manager || 'غير محدد'}</TableCell>
-                  <TableCell>
+                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{branch.manager || 'غير محدد'}</TableCell>
+                  <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <LocationIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                       <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
@@ -886,7 +1014,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({
                       </Typography>
                     </Box>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                     <Box>
                       {branch.email && (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
@@ -912,10 +1040,24 @@ const BranchesView: React.FC<BranchesViewProps> = ({
                     </Box>
                   </TableCell>
                   <TableCell align="center">
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                      {projectsCountLoading[branch.id] ? (
+                        <CircularProgress size={16} />
+                      ) : (
+                        <>
+                          <ProjectIcon sx={{ fontSize: 18, color: 'primary.main' }} />
+                          <Typography variant="body2" fontWeight="medium">
+                            {branchProjectsCount[branch.id] !== undefined ? branchProjectsCount[branch.id] : '...'}
+                          </Typography>
+                        </>
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell align="center">
                     <Chip
                       label={getBranchStatusText(branch.isActive)}
-                      color={getBranchStatusColor(branch.isActive)}
                       size="small"
+                      sx={getSoftStatusChipSx(!!branch.isActive)}
                     />
                   </TableCell>
                   <TableCell align="center">
@@ -953,7 +1095,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({
           ))
         ) : (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={7}>
                   <Box sx={{ p: 4, textAlign: 'center' }}>
               <BranchIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
               <Typography variant="h6" color="text.secondary">
@@ -1003,12 +1145,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({
                 ` - الصفحة ${currentPage} من ${totalPages}+`
               }
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {isSearchMode ? 
-                "🔍 نظام البحث المتوافق" :
-                "📄 النظام العادي (10 فروع/صفحة)"
-              }
-            </Typography>
+
             {(localLoading || searchLoading) && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <CircularProgress size={16} />

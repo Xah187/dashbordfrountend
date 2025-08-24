@@ -147,8 +147,7 @@ const Login = () => {
   const [countdown, setCountdown] = useState(0);
   const [canResend, setCanResend] = useState(true);
 
-  // لعرض رمز OTP في الواجهة للتجربة
-  const [displayOTP, setDisplayOTP] = useState("");
+  // إزالة عرض OTP التجريبي لضمان التكامل
 
   // حالة نافذة الدعم
   const [supportDialogOpen, setSupportDialogOpen] = useState(false);
@@ -343,10 +342,7 @@ const Login = () => {
     setError("");
   };
 
-  // محاكاة إرسال رمز OTP
-  const generateOTP = () => {
-    return Math.floor(1000 + Math.random() * 9000).toString();
-  };
+  // تم إزالة المحاكاة - الإرسال والتحقق عبر الخادم فقط
 
   // إرسال رمز OTP
   const handleSendOTP = async (e) => {
@@ -380,7 +376,6 @@ const Login = () => {
               "حدث خطأ أثناء إرسال الرمز. يرجى المحاولة مرة أخرى."
             );
           if (res.status === 200) setStep(3);
-          setSuccess(`تم إرسال رمز التحقق إلى +966 ${phoneNumber}`);
         });
 
       setCountdown(60); // 60 ثانية للعد التنازلي
@@ -395,19 +390,26 @@ const Login = () => {
   // إعادة إرسال رمز OTP
   const handleResendOTP = async () => {
     if (!canResend) return;
+    if (!validatePhoneNumber(phoneNumber)) {
+      setError("يرجى إدخال رقم هاتف صحيح (9 أرقام)");
+      return;
+    }
 
     setIsLoading(true);
     setError("");
 
     try {
-      const generatedOTP = generateOTP();
-
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      localStorage.setItem("tempOTP", generatedOTP);
-
-      // عرض الرمز الجديد في الواجهة للتجربة
-      setDisplayOTP(generatedOTP);
+      await axios
+        .post(
+          `${API_BASE_URL}/api/dashbord/auth/login`,
+          { phoneNumber: phoneNumber },
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${process.env.TOKEN_ADMIN || "dPdJ0ThcQ6ODl2_z5Nn2iO:APA91bE6yk0i_5M3YAmtAvBwEZIayJ4hOqFDMvQwQwhqTfn2bDwirSInge1kZGskTwvtzsEuZ6-FFU-06NVrAbTmB9UpQ63M9v5tgmKwj4_evGfJMz6PlIiWxOlvhHdnhR6fAbodYhRV"}  `,
+            },
+          }
+        );
 
       setSuccess("تم إعادة إرسال رمز التحقق");
       setCountdown(60);
@@ -464,8 +466,6 @@ const Login = () => {
           }
         });
       // حفظ بيانات المستخدم للاستخدام في النظام
-
-      setDisplayOTP("");
     } catch (error) {
       setError("حدث خطأ أثناء التحقق. يرجى المحاولة مرة أخرى.");
     } finally {
@@ -479,7 +479,6 @@ const Login = () => {
     setOtpCode("");
     setError("");
     setSuccess("");
-    setDisplayOTP("");
   };
   
   // العودة لخطوة إدخال الكابتشا
@@ -734,55 +733,7 @@ const Login = () => {
                     sx={{ fontWeight: "bold" }}
                   />
 
-                  {/* عرض رمز OTP للتجربة */}
-                  {displayOTP && (
-                    <Box
-                      sx={{
-                        mt: 2,
-                        p: 2,
-                        backgroundColor: "success.light",
-                        borderRadius: 2,
-                        border: "2px solid",
-                        borderColor: "success.main",
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          mb: 1,
-                          color: "success.contrastText",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        🔐 رمز التحقق للتجربة:
-                      </Typography>
-                      <Button
-                        variant="contained"
-                        color="success"
-                        size="large"
-                        onClick={() => setOtpCode(displayOTP)}
-                        sx={{
-                          fontSize: "1.8rem",
-                          fontWeight: "bold",
-                          letterSpacing: "8px",
-                          minWidth: "200px",
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        {displayOTP}
-                      </Button>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          display: "block",
-                          mt: 1,
-                          color: "success.contrastText",
-                        }}
-                      >
-                        اضغط على الرمز لإدخاله تلقائياً
-                      </Typography>
-                    </Box>
-                  )}
+                  {/* تم إزالة عرض رمز OTP التجريبي */}
                 </Box>
 
                 <OTPTextField

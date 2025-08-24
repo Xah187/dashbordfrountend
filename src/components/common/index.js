@@ -1,5 +1,4 @@
 // Export all common components for easier importing
-export { default as GlobalSearch } from './GlobalSearch';
 export { default as Logo } from './Logo';
 export { default as Notifications } from './Notifications';
 export { default as ProfileAvatar } from './ProfileAvatar';

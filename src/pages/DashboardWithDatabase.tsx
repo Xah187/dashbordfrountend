@@ -96,6 +96,11 @@ const shimmerAnimation = `
     60% { transform: translateY(-5px); }
   }
   
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  
   @keyframes pulse {
     0%, 100% { transform: scale(1); opacity: 1; }
     50% { transform: scale(1.2); opacity: 0.7; }
@@ -302,7 +307,7 @@ const EnhancedPieChart = ({ data, title }: { data: any[], title: string }) => {
       border: theme.palette.mode === 'dark' 
         ? '1px solid rgba(255,255,255,0.1)' 
         : '1px solid rgba(0,0,0,0.05)',
-      borderRadius: 3,
+      borderRadius: (theme) => theme.shape.borderRadius,
       boxShadow: theme.palette.mode === 'dark' 
         ? '0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2)' 
         : '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
@@ -322,7 +327,7 @@ const EnhancedPieChart = ({ data, title }: { data: any[], title: string }) => {
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
           <Box sx={{ 
             p: 1.5, 
-            borderRadius: 2, 
+            borderRadius: (theme) => theme.shape.borderRadius, 
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             mr: 2 
           }}>
@@ -378,7 +383,7 @@ const EnhancedPieChart = ({ data, title }: { data: any[], title: string }) => {
                 contentStyle={{
                   backgroundColor: theme.palette.mode === 'dark' ? '#1a1a1a' : '#ffffff',
                   border: 'none',
-                  borderRadius: 12,
+                  borderRadius: theme.shape.borderRadius,
                   boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
                   color: theme.palette.mode === 'dark' ? '#ffffff' : theme.palette.text.primary,
                   padding: '12px 16px'
@@ -657,7 +662,7 @@ const DashboardWithDatabase = () => {
       } finally {
         setIsAutoRefreshing(false);
       }
-    }, 20000); // 20 ثانية للداشبورد الرئيسي
+    }, 180000); // 3 دقائق للداشبورد الرئيسي
 
     return () => clearInterval(interval);
   }, []);
@@ -772,14 +777,14 @@ const DashboardWithDatabase = () => {
 
   return (
     <Box sx={{ 
-      p: 3, 
-      backgroundColor: theme.palette.background.default,
-      minHeight: '100vh'
+      p: { xs: 2, md: 3 }, 
+      backgroundColor: theme.palette.background.default, 
+      minHeight: '100vh' 
     }}>
       {/* رأس الصفحة المحسن */}
       <Box sx={{ 
         mb: 4,
-        p: 4,
+        p: { xs: 2.5, md: 4 },
         background: theme.palette.mode === 'dark' 
           ? 'linear-gradient(145deg, #0f1419 0%, #1a1a2e 25%, #16213e 50%, #0f3460 75%, #001122 100%)'
           : 'linear-gradient(145deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #667eea 75%, #764ba2 100%)',
@@ -845,13 +850,61 @@ const DashboardWithDatabase = () => {
               </Box>
             </Box>
           </Box>
-          {/* مؤشر التحديث التلقائي محسن */}
+          {/* مؤشر التحديث التلقائي وزر التحديث اليدوي */}
           <Box sx={{ 
             display: 'flex', 
             flexDirection: 'column',
             alignItems: 'flex-end',
             gap: 1.5
           }}>
+            {/* زر التحديث اليدوي */}
+            <Button
+              onClick={handleRefresh}
+              disabled={isAutoRefreshing}
+              variant="contained"
+              startIcon={
+                <RefreshIcon 
+                  sx={{ 
+                    animation: isAutoRefreshing ? 'spin 1s linear infinite' : 'none',
+                    transform: isAutoRefreshing ? 'rotate(360deg)' : 'rotate(0deg)'
+                  }} 
+                />
+              }
+              sx={{
+                background: 'rgba(255,255,255,0.2)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255,255,255,0.3)',
+                color: 'white',
+                fontWeight: 600,
+                px: 3,
+                py: 1.5,
+                borderRadius: 3,
+                textTransform: 'none',
+                fontSize: '0.9rem',
+                transition: 'all 0.3s ease',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
+                '&:hover': {
+                  background: 'rgba(255,255,255,0.3)',
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 8px 25px rgba(0,0,0,0.3)',
+                  border: '1px solid rgba(255,255,255,0.5)'
+                },
+                '&:active': {
+                  transform: 'translateY(0px)',
+                  boxShadow: '0 4px 15px rgba(0,0,0,0.2)'
+                },
+                '&:disabled': {
+                  background: 'rgba(255,255,255,0.1)',
+                  color: 'rgba(255,255,255,0.5)',
+                  transform: 'none',
+                  boxShadow: 'none'
+                }
+              }}
+            >
+              {isAutoRefreshing ? 'جاري التحديث...' : 'تحديث البيانات'}
+            </Button>
+            
+            {/* مؤشر التحديث التلقائي */}
             <Box sx={{ 
               display: 'flex', 
               alignItems: 'center', 
@@ -886,7 +939,7 @@ const DashboardWithDatabase = () => {
       </Box>
 
       {/* بطاقات الإحصائيات المحسنة */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={2} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
           <EnhancedStatCard
             title="إجمالي الشركات"
@@ -894,7 +947,6 @@ const DashboardWithDatabase = () => {
             icon={<BusinessIcon />}
             color={theme.palette.primary.main}
             bgColor={theme.palette.primary.main}
-            trend={12}
             subtitle="شركات مسجلة في النظام"
             delay={0}
           />
@@ -906,7 +958,6 @@ const DashboardWithDatabase = () => {
             icon={<AccountTreeIcon />}
             color={theme.palette.success.main}
             bgColor={theme.palette.success.main}
-            trend={8}
             subtitle="فروع نشطة وفعالة"
             delay={0.1}
           />
@@ -918,7 +969,6 @@ const DashboardWithDatabase = () => {
             icon={<AssignmentIcon />}
             color={theme.palette.info.main}
             bgColor={theme.palette.info.main}
-            trend={15}
             subtitle="مشاريع في جميع المراحل"
             delay={0.2}
           />
@@ -930,7 +980,6 @@ const DashboardWithDatabase = () => {
             icon={<TrendingUpIcon />}
             color={theme.palette.warning.main}
             bgColor={theme.palette.warning.main}
-            trend={5}
             subtitle="مشاريع قيد التنفيذ"
             delay={0.3}
           />
@@ -985,7 +1034,7 @@ const DashboardWithDatabase = () => {
             </Typography>
           </Box>
 
-          <Grid container spacing={4}>
+          <Grid container spacing={{ xs: 2, md: 4 }}>
           <Grid item xs={12} md={6}>
             <EnhancedPieChart 
               data={reportsData.companiesByCity.map((city, index) => ({
@@ -1047,7 +1096,7 @@ const DashboardWithDatabase = () => {
               </Typography>
             </Box>
             
-            <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
+            <Box sx={{ maxHeight: { xs: 300, md: 400 }, overflow: 'auto' }}>
               {reportsData.companies
                 .filter(company => company.totalProjects > 0)
                 .slice(0, 6)
@@ -1136,7 +1185,7 @@ const DashboardWithDatabase = () => {
             {reportsData.projects.slice(0, 4).map((project, index) => (
               <Grid item xs={12} sm={6} md={3} key={project.id}>
                 <Card sx={{ 
-                  p: 2, 
+                  p: { xs: 1.5, md: 2 }, 
                   height: '100%',
                   border: '2px solid transparent',
                   borderColor: index === 0 ? 'primary.main' : 'transparent',
@@ -1163,11 +1212,11 @@ const DashboardWithDatabase = () => {
                     </Box>
                   )}
                   
-                  <Typography variant="h6" sx={{ 
+                   <Typography variant="h6" sx={{ 
                     fontWeight: 'bold', 
-                    fontSize: 14,
+                     fontSize: { xs: 13, md: 14 },
                     mb: 1,
-                    height: 40,
+                     height: { xs: 36, md: 40 },
                     overflow: 'hidden',
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
@@ -1251,7 +1300,7 @@ const DashboardWithDatabase = () => {
               : '0 8px 32px rgba(0,0,0,0.1)',
             animation: 'slideInUp 0.8s ease-out 0.6s both'
           }}>
-            <CardContent sx={{ p: 3 }}>
+            <CardContent sx={{ p: { xs: 2, md: 3 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography 
                   variant="h6" 
@@ -1358,7 +1407,7 @@ const DashboardWithDatabase = () => {
               : '0 8px 32px rgba(0,0,0,0.1)',
             animation: 'slideInUp 0.8s ease-out 0.8s both'
           }}>
-            <CardContent sx={{ p: 3 }}>
+            <CardContent sx={{ p: { xs: 2, md: 3 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography 
                   variant="h6" 
@@ -1489,7 +1538,7 @@ const DashboardWithDatabase = () => {
                 : '0 8px 32px rgba(0,0,0,0.1)',
               animation: 'slideInUp 0.8s ease-out 1s both'
             }}>
-              <CardContent sx={{ p: 3 }}>
+              <CardContent sx={{ p: { xs: 2, md: 3 } }}>
                 <Typography 
                   variant="h6" 
                   component="h2" 

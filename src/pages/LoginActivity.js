@@ -14,7 +14,6 @@
  * - عرض أكواد التحقق للمستخدمين
  * - إحصائيات تسجيل الدخول
  * - البحث والفلترة حسب الحالة والشركة
- * - تصدير إلى Excel
  */
 import React, { useState, useEffect } from 'react';
 import {
@@ -63,7 +62,6 @@ import {
   CheckCircle as CheckCircleIcon,
   Business as BusinessIcon,
   Cancel as CancelIcon,
-  GetApp as GetAppIcon,
   Assessment as AssessmentIcon,
   Warning as WarningIcon,
   Schedule as ScheduleIcon,
@@ -95,6 +93,7 @@ import {
   calculateSessionDuration,
   filterActivitiesByPeriod
 } from '../api';
+import { getSoftStatusChipSx } from '../utils/colorUtils';
 
 const LoginActivity = () => {
   const theme = useTheme();
@@ -194,6 +193,22 @@ const LoginActivity = () => {
       // تحديث البيانات المفلترة وإعادة حساب pagination
       setDailyFilteredActivities(todayActivities);
       applyPagination(todayActivities);
+
+      // حساب تسجيلات اليوم والأسبوع محلياً وتحديث الإحصائيات
+      try {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const weekAgo = new Date(startOfToday.getTime() - 7 * 24 * 60 * 60 * 1000);
+        let todayCount = 0;
+        let weekCount = 0;
+        for (const a of allActivities) {
+          if (!a?.DateOFlogin) continue;
+          const d = new Date(a.DateOFlogin);
+          if (d >= startOfToday) todayCount++;
+          if (d >= weekAgo) weekCount++;
+        }
+        setStats(prev => ({ ...prev, todayLogins: todayCount, weekLogins: weekCount }));
+      } catch {}
       
     } catch (err) {
       console.error('❌ Error fetching login activities:', err);
@@ -340,29 +355,7 @@ const LoginActivity = () => {
   // البيانات للصفحة الحالية (معروضة من pagination)
   const currentActivities = loginActivities;
 
-  // تصدير البيانات (اليوم الحالي)
-  const exportData = () => {
-    const fields = ['id', 'userName', 'IDNumber', 'PhoneNumber', 'job', 'jobdiscrption', 'codeVerification', 'DateOFlogin', 'DateEndLogin', 'Activation', 'IDCompany'];
-    const headers = ['رقم المستخدم', 'اسم المستخدم', 'رقم الهوية', 'رقم الهاتف', 'الوظيفة', 'وصف الوظيفة', 'كود التحقق', 'تاريخ الدخول', 'تاريخ انتهاء الجلسة', 'الحالة', 'رقم الشركة'];
-    
-    // استخدام البيانات اليومية المفلترة بالفلاتر المحلية إذا وجدت
-    let dataToExport = dailyFilteredActivities;
-    if (searchQuery || filterCompany || filterStatus) {
-      dataToExport = applyLocalFilters(dailyFilteredActivities);
-    }
-    
-    const formattedActivities = dataToExport.map(activity => ({
-      ...activity,
-      Activation: activity.Activation === 'true' ? 'نشط' : 'غير نشط',
-      DateOFlogin: formatDate(activity.DateOFlogin),
-      DateEndLogin: formatDate(activity.DateEndLogin)
-    }));
-    
-    const today = new Date().toLocaleDateString('ar-SA');
-    
-    // تم إزالة تصدير البيانات إلى Excel
-    showNotification('تم إزالة تصدير البيانات إلى Excel');
-  };
+  // تم إزالة تصدير البيانات إلى Excel
 
   // تحديد لون الحالة
   const getStatusColor = (activation) => {
@@ -476,7 +469,9 @@ const LoginActivity = () => {
         <Tabs
           value={activeTab}
           onChange={(event, newValue) => setActiveTab(newValue)}
-          variant="fullWidth"
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab 
@@ -593,18 +588,10 @@ const LoginActivity = () => {
                 </Grid>
               </Grid>
               
-              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Box sx={{ mt: 1, textAlign: 'right' }}>
                 <Typography variant="body2" color="text.secondary">
-                  عرض {loginActivities.length} من أصل {totalItems} نشاط • اليوم الحالي فقط • الصفحة {currentPage}/{totalPages}
+                  تسجيلات اليوم: {totalItems}
                 </Typography>
-                <Button
-                  variant="contained"
-                  onClick={exportData}
-                  startIcon={<GetAppIcon />}
-                  color="success"
-                >
-                  تصدير إلى Excel
-                </Button>
               </Box>
             </CardContent>
           </Card>
@@ -612,16 +599,22 @@ const LoginActivity = () => {
           {/* Table */}
           <Card>
             <CardContent>
-              <TableContainer>
-                <Table>
+              <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
+                <Table 
+                  size="small" 
+                  sx={{ 
+                    minWidth: { xs: 650, md: 900 },
+                    '& th, & td': { whiteSpace: 'nowrap', fontSize: { xs: '0.8rem', sm: '0.9rem' }, py: { xs: 0.75, sm: 1 } }
+                  }}
+                >
                   <TableHead>
                     <TableRow>
                       <TableCell>المستخدم</TableCell>
-                      <TableCell>معلومات الاتصال</TableCell>
-                      <TableCell>الوظيفة</TableCell>
-                      <TableCell>كود التحقق</TableCell>
-                      <TableCell>تاريخ الدخول</TableCell>
-                      <TableCell>تاريخ انتهاء الجلسة</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>معلومات الاتصال</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>الوظيفة</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>كود التحقق</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>تاريخ الدخول</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>تاريخ انتهاء الجلسة</TableCell>
                       <TableCell>الحالة</TableCell>
                       <TableCell>الإجراءات</TableCell>
                     </TableRow>
@@ -633,7 +626,7 @@ const LoginActivity = () => {
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             <Avatar 
                               src={activity.image}
-                              sx={{ width: 40, height: 40, mr: 2 }}
+                              sx={{ width: { xs: 28, sm: 40 }, height: { xs: 28, sm: 40 }, mr: 2 }}
                             >
                               {activity.userName?.charAt(0)}
                             </Avatar>
@@ -647,7 +640,7 @@ const LoginActivity = () => {
                             </Box>
                           </Box>
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                           <Box>
                             <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
                               <PhoneIcon sx={{ fontSize: 16, mr: 1 }} />
@@ -658,7 +651,7 @@ const LoginActivity = () => {
                             </Typography>
                           </Box>
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                           <Box>
                             <Typography variant="body2" fontWeight="bold">
                               {activity.job || 'غير محدد'}
@@ -668,20 +661,20 @@ const LoginActivity = () => {
                             </Typography>
                           </Box>
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                           <Chip
                             label={activity.codeVerification || 'غير محدد'}
-                            icon={<CodeIcon />}
+                            icon={<CodeIcon sx={{ fontSize: { xs: 16, sm: 20 } }} />}
                             color="primary"
                             variant="outlined"
                           />
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                           <Typography variant="body2">
                             {formatDate(activity.DateOFlogin)}
                           </Typography>
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                           <Typography variant="body2">
                             {formatDate(activity.DateEndLogin)}
                           </Typography>
@@ -689,9 +682,9 @@ const LoginActivity = () => {
                         <TableCell>
                           <Chip
                             label={getStatusText(activity.Activation)}
-                            icon={getStatusIcon(activity.Activation)}
-                            color={getStatusColor(activity.Activation)}
+                            icon={React.cloneElement(getStatusIcon(activity.Activation), { sx: { fontSize: { xs: 16, sm: 20 } } })}
                             size="small"
+                            sx={getSoftStatusChipSx(activity.Activation === 'true')}
                           />
                         </TableCell>
                         <TableCell>
@@ -702,7 +695,7 @@ const LoginActivity = () => {
                                 setOpenDetailsDialog(true);
                               }}
                             >
-                              <VisibilityIcon />
+                              <VisibilityIcon sx={{ fontSize: { xs: 18, sm: 22 } }} />
                             </IconButton>
                           </Tooltip>
                         </TableCell>
@@ -713,11 +706,7 @@ const LoginActivity = () => {
               </TableContainer>
 
               {/* Numbered Pagination */}
-              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="body2" color="text.secondary">
-                  الصفحة {currentPage} من {totalPages} • إجمالي {totalItems} نشاط (اليوم الحالي فقط)
-                </Typography>
-                
+              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                 {totalPages > 1 && (
                   <Pagination
                     count={totalPages}
@@ -735,10 +724,6 @@ const LoginActivity = () => {
                     }}
                   />
                 )}
-                
-                <Typography variant="body2" color="primary" sx={{ fontWeight: 'bold' }}>
-                  {itemsPerPage} عناصر/صفحة
-                </Typography>
               </Box>
               
               {/* Empty State Message */}

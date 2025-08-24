@@ -19,10 +19,6 @@ import {
   Paper,
   Chip,
   Pagination,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Alert,
   Skeleton,
   ButtonGroup,
@@ -30,24 +26,59 @@ import {
 } from '@mui/material';
 import {
   Assignment as AssignmentIcon,
-  Receipt as ReceiptIcon,
   AttachMoney as MoneyIcon,
-  AccountBalance as BalanceIcon,
-  StickyNote2 as NotesIcon,
   PictureAsPdf as PdfIcon,
   TableView as ExcelIcon,
   Download as DownloadIcon
 } from '@mui/icons-material';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import Tooltip from '@mui/material/Tooltip';
+import Autocomplete from '@mui/material/Autocomplete';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { apiClient, API_BASE_URL } from '../api/config';
 import { authUtils } from '../api/config';
-import { 
-  fetchCompanies, 
-  fetchCompanySubProjects
+import {
+  fetchCompanies,
+  fetchCompanyEmployees
 } from '../api/database-api';
 import { fetchSubscriptions } from '../api/subscriptions';
+import { fetchDashboardReports } from '../api/dashboard';
+import { getSoftSubscriptionStatusChipSx } from '../utils/colorUtils';
+import { companiesSubscribedApi } from './CompaniesSubscribed/api';
+
+// Arabic PDF font support (Tajawal)
+let TAJAWAL_REG_BASE64: string | null = null;
+let TAJAWAL_BOLD_BASE64: string | null = null;
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+};
+
+const loadArabicFont = async () => {
+  if (TAJAWAL_REG_BASE64 && TAJAWAL_BOLD_BASE64) return;
+  try {
+    const [regRes, boldRes] = await Promise.all([
+      fetch('/assets/fonts/Tajawal-Regular.ttf'),
+      fetch('/assets/fonts/Tajawal-Bold.ttf'),
+    ]);
+    const [regBuf, boldBuf] = await Promise.all([
+      regRes.arrayBuffer(),
+      boldRes.arrayBuffer(),
+    ]);
+    TAJAWAL_REG_BASE64 = arrayBufferToBase64(regBuf);
+    TAJAWAL_BOLD_BASE64 = arrayBufferToBase64(boldBuf);
+  } catch (e) {
+    console.warn('Failed to load Arabic fonts, PDF text may appear garbled.', e);
+  }
+};
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -81,21 +112,35 @@ const AdvancedFeatures: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   // Data states
-  const [stageNotes, setStageNotes] = useState([]);
-  const [requests, setRequests] = useState([]);
-  const [returns, setReturns] = useState([]);
-  const [revenue, setRevenue] = useState([]);
-  const [financialCustody, setFinancialCustody] = useState([]);
+  const [requests, setRequests] = useState([]); // الشركات
+  const [subscriptions, setSubscriptions] = useState([]); // الاشتراكات
+  const [employees, setEmployees] = useState<any[]>([]); // مستخدمين الشركة
+  const [employeesLastIds, setEmployeesLastIds] = useState<number[]>([0]);
+  const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
+  const [employeeSearchLoading, setEmployeeSearchLoading] = useState(false);
+  const [isEmployeeSearchMode, setIsEmployeeSearchMode] = useState(false);
+  const [employeeSearchLastIds, setEmployeeSearchLastIds] = useState<number[]>([0]);
+
+  // بحث الشركة لاختيارها لعرض مستخدمينها
+  const [companySearchTerm, setCompanySearchTerm] = useState('');
+  const [companySearchResults, setCompanySearchResults] = useState<any[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
+  const [selectedCompanyName, setSelectedCompanyName] = useState<string>('');
+  const [companySearchLoading, setCompanySearchLoading] = useState(false);
+  const [companyNoResults, setCompanyNoResults] = useState(false);
   
+  // تم إلغاء ميزة "البحثات الأخيرة"
+
   // Pagination
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const itemsPerPage = 10; // ثابت على 10 عناصر لكل صفحة
+
+  // لا حاجة لتتبّع lastId هنا بعد إزالة نشاطات الدخول
   
   // Filters
   const [projectFilter, setProjectFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
 
   // دوال معالجة تغيير الفلاتر
   const handleProjectFilterChange = (value: string) => {
@@ -103,16 +148,17 @@ const AdvancedFeatures: React.FC = () => {
     setPage(1); // إعادة تعيين الصفحة عند تغيير الفلتر
   };
 
-  const handleStatusFilterChange = (value: string) => {
-    setStatusFilter(value);
-    setPage(1); // إعادة تعيين الصفحة عند تغيير الفلتر
-  };
+  // تم إزالة فلترة الحالة
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
     setPage(1); // إعادة تعيين الصفحة إلى 1 عند تغيير التبويب
     setTotalItems(0);
     setTotalPages(1);
+    if (newValue === 2) {
+      setEmployeesLastIds([0]);
+      setEmployeeSearchLastIds([0]);
+    }
   };
 
   const fetchData = async (endpoint: string, params: any = {}) => {
@@ -126,17 +172,6 @@ const AdvancedFeatures: React.FC = () => {
       
       // ربط كل endpoint بالـ API الحقيقي المناسب مع pagination
       switch (endpoint) {
-        case 'stage-notes':
-          // استخدام API جلب المشاريع
-          try {
-            const result = await fetchCompanySubProjects('1', { limit: itemsPerPage, page: page });
-            paginatedData = result.projects || [];
-            total = result.pagination?.totalItems || paginatedData.length * 5; // تقدير للعدد الكلي
-          } catch {
-            paginatedData = [];
-            total = 0;
-          }
-          break;
         case 'requests':
           // استخدام API الشركات الحقيقي مع pagination
           try {
@@ -152,46 +187,53 @@ const AdvancedFeatures: React.FC = () => {
             total = 0;
           }
           break;
-        case 'returns':
-          // استخدام API آخر للمشاريع
-          try {
-            const result = await fetchCompanySubProjects('1', { limit: itemsPerPage, page: page });
-            paginatedData = result.projects || [];
-            total = result.pagination?.totalItems || paginatedData.length * 3; // تقدير للعدد الكلي
-          } catch {
-            paginatedData = [];
-            total = 0;
-          }
-          break;
-        case 'revenue':
-          // استخدام API الشركات للإيرادات
-          try {
-            const result = await fetchCompanies({ limit: itemsPerPage, page: page });
-            paginatedData = result.companies || [];
-            pagination = result.pagination;
-            total = pagination?.totalItems || 0;
-            
-
-          } catch (error) {
-            console.error('❌ Error fetching companies for revenue:', error);
-            paginatedData = [];
-            total = 0;
-          }
-          break;
-        case 'financial-custody':
-          // استخدام API الاشتراكات
+        // تم إزالة نشاطات الدخول
+        case 'revenue': {
+          // الاشتراكات
           try {
             const result = await fetchSubscriptions({ page: page, limit: itemsPerPage });
             paginatedData = result.data || [];
-            total = result.totalCount || result.pagination?.totalItems || 0;
-            
-
+            total = result.pagination?.totalItems || 0;
           } catch (error) {
             console.error('❌ Error fetching subscriptions:', error);
             paginatedData = [];
             total = 0;
           }
           break;
+        }
+        case 'financial-custody': {
+          // تم حذف تبويب قوالب المراحل
+          paginatedData = [];
+          total = 0;
+          break;
+        }
+        case 'company-employees': {
+          if (!selectedCompanyId) {
+            paginatedData = [];
+            total = 0;
+            break;
+          }
+          try {
+            const numberParam = employeesLastIds[page - 1] || 0;
+            const result = await fetchCompanyEmployees(String(selectedCompanyId), { lastId: numberParam, limit: itemsPerPage });
+            const all = (result.employees || []).sort((a: any, b: any) => (Number(a.id)||0) - (Number(b.id)||0));
+            const pageData = all.slice(0, itemsPerPage);
+            paginatedData = pageData;
+            const hasMore = all.length > itemsPerPage;
+            const nextLastId = pageData.reduce((m: number, a: any) => Math.max(m, Number(a.id) || 0), numberParam);
+            setEmployeesLastIds((prev) => {
+              const copy = [...prev];
+              copy[page] = nextLastId;
+              return copy;
+            });
+            total = hasMore ? page * itemsPerPage + 1 : (page - 1) * itemsPerPage + pageData.length;
+          } catch (error) {
+            console.error('❌ Error fetching company employees:', error);
+            paginatedData = [];
+            total = (page - 1) * itemsPerPage;
+          }
+          break;
+        }
         default:
           throw new Error('نوع البيانات غير مدعوم');
       }
@@ -214,40 +256,120 @@ const AdvancedFeatures: React.FC = () => {
     }
   };
 
-  const loadData = async (tabIndex: number) => {
-    const filters = {
-      ...(projectFilter && { projectId: projectFilter }),
-      ...(statusFilter && { status: statusFilter })
-    };
+  // جلب صفحة نتائج بحث الموظفين بشكل متدرج حسب lastId
+  const loadEmployeeSearchPage = async (currentPage: number) => {
+    if (activeTab !== 2) return;
+    if (!selectedCompanyId) return;
+    const term = (employeeSearchTerm || '').trim().toLowerCase();
+    if (!term) return;
 
-    switch (tabIndex) {
-      case 0:
-        const notes = await fetchData('stage-notes', filters);
-        setStageNotes(notes);
-        break;
-      case 1:
-        const reqs = await fetchData('requests', filters);
-        setRequests(reqs);
-        break;
-      case 2:
-        const rets = await fetchData('returns', filters);
-        setReturns(rets);
-        break;
-      case 3:
-        const revs = await fetchData('revenue', filters);
-        setRevenue(revs);
-        break;
-      case 4:
-        const custody = await fetchData('financial-custody', filters);
-        setFinancialCustody(custody);
-        break;
+    try {
+      setEmployeeSearchLoading(true);
+
+      const targetCount = itemsPerPage;
+      const startLastId = employeeSearchLastIds[currentPage - 1] || 0;
+      let workingLastId = startLastId;
+      let collected: any[] = [];
+      let iterations = 0;
+      const maxIterations = 50; // حماية من الحلقات الطويلة
+
+      while (collected.length < targetCount && iterations < maxIterations) {
+        iterations++;
+        // استخدام API الموظفين مع pagination (دفعات) ثم فلترة محلية بالاسم
+        const result = await fetchCompanyEmployees(String(selectedCompanyId), { lastId: workingLastId, limit: itemsPerPage });
+        const batchAll = (result.employees || []) as any[];
+        if (batchAll.length === 0) {
+          // لا مزيد من البيانات
+          break;
+        }
+        // فلترة حسب الاسم أو رقم الهاتف
+        const termDigits = term.replace(/[^0-9]/g, '');
+        const filtered = batchAll.filter((e: any) => {
+          const name = String(e?.userName || '').toLowerCase();
+          const rawPhone = String(e?.PhoneNumber ?? '');
+          const phoneDigits = rawPhone.replace(/[^0-9]/g, '');
+          const phoneMatches = termDigits ? phoneDigits.includes(termDigits) : rawPhone.includes(term);
+          return name.includes(term) || phoneMatches;
+        });
+        // منع التكرار داخل الصفحة
+        for (const emp of filtered) {
+          if (!collected.some((x) => String(x.id) === String(emp.id))) {
+            collected.push(emp);
+            if (collected.length >= targetCount) break;
+          }
+        }
+        // تحديث lastId للدفعة المقبلة (بناءً على أكبر id في الدفعة الخام)
+        const nextLast = batchAll.reduce((m, e) => {
+          const v = Number(e?.id) || 0;
+          return v > m ? v : m;
+        }, workingLastId);
+        workingLastId = nextLast <= workingLastId ? workingLastId + 5 : nextLast;
+        // إذا كانت الدفعة أقل من limit، قد لا يكون هناك المزيد لكن نستمر قليلاً لتجاوز عناصر لا تطابق البحث
+        if (batchAll.length < itemsPerPage && collected.length < targetCount) {
+          // سنحاول تكرار حلقة إضافية أو اثنتين قبل التوقف
+          if (iterations > 5) break;
+        }
+      }
+
+      setEmployees(collected);
+      setIsEmployeeSearchMode(true);
+      // حفظ lastId للصفحة الحالية لاستخدامه في الصفحات التالية
+      setEmployeesLastIds((prev) => prev); // بدون تغيير لمسار العرض العادي
+      setEmployeeSearchLastIds((prev) => {
+        const copy = [...prev];
+        copy[currentPage] = workingLastId;
+        return copy;
+      });
+
+      // حساب إجمالي العناصر بشكل تقديري لدعم الترقيم (يُظهر وجود المزيد إذا كانت الصفحة ممتلئة)
+      const hasMore = collected.length === itemsPerPage;
+      const total = hasMore ? currentPage * itemsPerPage + 1 : (currentPage - 1) * itemsPerPage + collected.length;
+      setTotalItems(total);
+      setTotalPages(Math.max(1, Math.ceil(total / itemsPerPage)));
+    } catch (e) {
+      console.error('❌ Error in progressive employee search:', e);
+      setEmployees([]);
+      setIsEmployeeSearchMode(true);
+      setTotalItems((current) => (page - 1) * itemsPerPage);
+      setTotalPages((_) => Math.max(1, page - 1));
+    } finally {
+      setEmployeeSearchLoading(false);
     }
   };
 
-  // تحميل البيانات عند تغيير التبويب أو الصفحة أو الفلاتر
+  const loadData = async (tabIndex: number) => {
+    const filters = {
+      ...(projectFilter && { projectId: projectFilter })
+    };
+
+    switch (tabIndex) {
+      case 0: {
+        const reqs = await fetchData('requests', filters);
+        setRequests(reqs);
+        break;
+      }
+      case 1: {
+        const subs = await fetchData('revenue', filters);
+        setSubscriptions(subs);
+        break;
+      }
+      case 2: {
+        // إذا كان وضع البحث مفعلاً، لا نجلب القائمة العادية
+        if (isEmployeeSearchMode && employeeSearchTerm.trim()) {
+          await loadEmployeeSearchPage(page);
+        } else {
+          const emps = await fetchData('company-employees', filters);
+          setEmployees(emps);
+        }
+        break;
+      }
+    }
+  };
+
+  // تحميل البيانات عند تغيير التبويب أو الصفحة أو الفلاتر أو الشركة المحددة (للمستخدمين)
   useEffect(() => {
     loadData(activeTab);
-  }, [activeTab, page, projectFilter, statusFilter]);
+  }, [activeTab, page, projectFilter, selectedCompanyId]);
 
   const formatDate = (dateString: string) => {
     if (!dateString) return 'غير محدد';
@@ -261,29 +383,157 @@ const AdvancedFeatures: React.FC = () => {
     }).format(amount);
   };
 
+  // يحوّل أي قيمة إلى نص عربي آمن مع استبدال undefined/null/NaN ب"غير محدد"
+  const safeText = (value: any, max?: number): string => {
+    const raw = value === undefined || value === null ? '' : String(value);
+    const t = raw.trim();
+    const needsFallback =
+      t === '' ||
+      t.toLowerCase() === 'undefined' ||
+      t.toLowerCase() === 'null' ||
+      t.toLowerCase() === 'nan';
+    const out = needsFallback ? 'غير محدد' : t;
+    return max ? out.substring(0, max) : out;
+  };
+
+  // بناء HTML للطباعة (يعتمد على متصفح النظام لطباعة PDF بدعم عربي صحيح)
+  const buildPrintableHtml = () => {
+    const title = getTabName();
+    const data = getCurrentTabData();
+    const printDate = new Date().toLocaleString('ar-SA');
+
+    // رؤوس الأعمدة حسب التبويب
+    let headers: string[] = [];
+    let rowsHtml = '';
+    const num = (i: number) => (page - 1) * itemsPerPage + i + 1;
+
+    if (activeTab === 0) {
+      headers = ['م', 'رقم الشركة', 'اسم الشركة', 'المدينة', 'الدولة', 'السجل', 'الفروع المسموحة', 'بداية الاشتراك', 'نهاية الاشتراك'];
+      rowsHtml = data.map((item: any, i: number) => `
+        <tr>
+          <td>${safeText(num(i))}</td>
+          <td>${safeText(item.id)}</td>
+          <td>${safeText(item.name)}</td>
+          <td>${safeText(item.city)}</td>
+          <td>${safeText(item.country)}</td>
+          <td>${safeText(item.registrationNumber)}</td>
+          <td>${safeText(item.branchesAllowed)}</td>
+          <td>${safeText(formatDate(item.subscriptionStart))}</td>
+          <td>${safeText(formatDate(item.subscriptionEnd))}</td>
+        </tr>
+      `).join('');
+    } else if (activeTab === 1) {
+      headers = ['م', 'رقم الشركة', 'اسم الشركة', 'الباقة', 'المبلغ', 'تاريخ البداية', 'تاريخ النهاية', 'الحالة'];
+      rowsHtml = data.map((item: any, i: number) => `
+        <tr>
+          <td>${safeText(num(i))}</td>
+          <td>${safeText(item.companyId || item.id)}</td>
+          <td>${safeText(item.companyName)}</td>
+          <td>${safeText(item.planName)}</td>
+          <td>${safeText(formatAmount(item.amount))}</td>
+          <td>${safeText(formatDate(item.startDate))}</td>
+          <td>${safeText(formatDate(item.endDate))}</td>
+          <td>${(() => { const raw = String(item.status || '').toLowerCase(); return raw === 'expired' ? 'منتهي' : raw === 'active' ? 'نشط' : safeText(item.status); })()}</td>
+        </tr>
+      `).join('');
+    } else if (activeTab === 2) {
+      headers = ['م', 'المعرف', 'الاسم', 'الوظيفة', 'القسم', 'الهاتف', 'الحالة'];
+      rowsHtml = data.map((item: any, i: number) => `
+        <tr>
+          <td>${safeText(num(i))}</td>
+          <td>${safeText(item.id)}</td>
+          <td>${safeText(item.userName)}</td>
+          <td>${safeText(item.job)}</td>
+          <td>${safeText(item.jobHOM)}</td>
+          <td>${safeText(item.PhoneNumber)}</td>
+          <td>${String(item.Activation).toLowerCase() === 'true' ? 'نشط' : 'غير نشط'}</td>
+        </tr>
+      `).join('');
+    }
+
+    const headHtml = headers.map(h => `<th>${h}</th>`).join('');
+
+    return `<!doctype html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="utf-8" />
+      <title>${title}</title>
+      <style>
+        @font-face {
+          font-family: 'Tajawal';
+          src: url('/assets/fonts/Tajawal-Regular.ttf') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+        }
+        @font-face {
+          font-family: 'Tajawal';
+          src: url('/assets/fonts/Tajawal-Bold.ttf') format('truetype');
+          font-weight: bold;
+          font-style: normal;
+        }
+        body { font-family: 'Tajawal', Arial, sans-serif; margin: 24px; }
+        h1 { margin: 0 0 12px; font-size: 18px; }
+        .meta { color: #666; margin-bottom: 16px; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; }
+        thead th { background: #297fb9; color: #fff; padding: 8px; font-weight: 700; font-size: 12px; }
+        tbody td { border-bottom: 1px solid #eee; padding: 6px 8px; font-size: 12px; }
+        tbody tr:nth-child(even) td { background: #fafafa; }
+        .footer { margin-top: 12px; font-size: 11px; color: #333; }
+        @media print {
+          @page { size: A4 landscape; margin: 10mm; }
+        }
+      </style>
+    </head>
+    <body>
+      <h1>تقرير: ${title}</h1>
+      <div class="meta">تاريخ التصدير: ${printDate} • الصفحة ${page} من ${totalPages}</div>
+      <table>
+        <thead><tr>${headHtml}</tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+      <div class="footer">إجمالي السجلات المعروضة: ${data.length}</div>
+      <script>window.onload = () => { setTimeout(() => window.print(), 300); };</script>
+    </body>
+    </html>`;
+  };
+
+  const printToPDF = () => {
+    const html = buildPrintableHtml();
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+    }
+  };
+  // ملاحظة: سنعتمد على الخط والمحاذاة فقط بدون إدراج علامات RTL
+
   const getStatusChip = (status: string) => {
-    const statusMap = {
-      'completed': { label: 'مكتمل', color: 'success' as const },
-      'pending': { label: 'معلق', color: 'warning' as const },
-      'approved': { label: 'موافق عليه', color: 'success' as const },
-      'rejected': { label: 'مرفوض', color: 'error' as const },
-      'true': { label: 'نشط', color: 'success' as const },
-      'false': { label: 'غير نشط', color: 'default' as const }
+    const raw = (status || '').toString().trim().toLowerCase();
+    const labelMap: Record<string, string> = {
+      'active': 'نشط',
+      'expired': 'منتهي',
+      'expiring': 'ينتهي قريباً',
+      'approved': 'موافق عليه',
+      'rejected': 'مرفوض',
+      'pending': 'معلق',
+      'completed': 'مكتمل',
+      'true': 'نشط',
+      'false': 'غير نشط'
     };
-    
-    const statusInfo = statusMap[status as keyof typeof statusMap] || { label: status, color: 'default' as const };
-    
-    return <Chip label={statusInfo.label} color={statusInfo.color} size="small" />;
+    const statusForColor = raw === 'true' ? 'active' : raw === 'false' ? 'ملغي' : raw;
+    const sx = getSoftSubscriptionStatusChipSx(statusForColor);
+    const isUndefinedish = raw === '' || raw === 'undefined' || raw === 'null' || raw === 'nan';
+    const label = labelMap[raw] || (isUndefinedish ? 'غير محدد' : status);
+    return <Chip label={label} size="small" sx={{ ...sx, fontWeight: 'bold' }} />;
   };
 
   // Get current tab data helper
   const getCurrentTabData = () => {
     switch (activeTab) {
-      case 0: return stageNotes;
-      case 1: return requests;
-      case 2: return returns;
-      case 3: return revenue;
-      case 4: return financialCustody;
+      case 0: return requests;
+      case 1: return subscriptions;
+      case 2: return employees;
       default: return [];
     }
   };
@@ -291,14 +541,169 @@ const AdvancedFeatures: React.FC = () => {
   // Get tab name helper
   const getTabName = () => {
     const tabNames = [
-      'بيانات المشاريع',
       'بيانات الشركات',
-      'المشاريع الحديثة',
-      'الشركات المشتركة',
-      'بيانات الاشتراكات'
+      'الاشتراكات',
+      'مستخدمين الشركة'
     ];
     return tabNames[activeTab] || 'البيانات';
   };
+
+  // حساب رقم الصف العام
+  const getRowNumber = (index: number) => (page - 1) * itemsPerPage + index + 1;
+
+  // بحث الشركات لاختيار شركة للمستخدمين
+  const handleSearchCompanies = async () => {
+    try {
+      if (!companySearchTerm || companySearchTerm.trim().length < 2) {
+        setCompanySearchResults([]);
+        setCompanyNoResults(false);
+        return;
+      }
+      
+      // تم إلغاء تتبع البحثات الأخيرة
+      // بديل البحث: جلب صفحات من الشركات ثم فلترة محلياً
+      const term = companySearchTerm.trim().toLowerCase();
+      const pageLimit = 10;
+      const maxPages = 5; // جلب حتى 5 صفحات كحد أقصى (50 شركة)
+      const aggregated: any[] = [];
+      for (let p = 1; p <= maxPages; p++) {
+        const result = await fetchCompanies({ limit: pageLimit, page: p });
+        const companies = result?.companies || [];
+        aggregated.push(...companies);
+        if (!result?.hasMore || companies.length < pageLimit) break;
+      }
+
+      const filtered = aggregated.filter((c: any) => {
+        const name = String(c?.name || '').toLowerCase();
+        const city = String(c?.city || '').toLowerCase();
+        const reg = String(c?.registrationNumber || '').toLowerCase();
+        return name.includes(term) || city.includes(term) || reg.includes(term);
+      }).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        city: c.city,
+        country: c.country,
+        registrationNumber: c.registrationNumber,
+      }));
+
+      setCompanySearchResults(filtered);
+      // تحديث companyNoResults بناءً على وجود النتائج
+      setCompanyNoResults(filtered.length === 0);
+    } catch (e) {
+      console.error('❌ Error searching companies:', e);
+      setCompanySearchResults([]);
+      // لا نعرض رسالة "لا توجد نتائج" في حالة الخطأ
+      setCompanyNoResults(false);
+    }
+  };
+
+  const handleSelectCompany = (company: any) => {
+    setSelectedCompanyId(String(company.id));
+    setSelectedCompanyName(company.name || '');
+    setPage(1);
+    setEmployees([]);
+    setEmployeeSearchTerm('');
+    setIsEmployeeSearchMode(false);
+    // لا نمسح نتائج البحث بعد الاختيار - نتركها للمستخدم
+    // setCompanySearchResults([]); // إزالة هذا السطر
+  };
+
+  // تطبيق الفلاتر
+  const applyFilters = () => {
+    if (companySearchTerm.trim().length >= 2) {
+      handleSearchCompanies();
+    }
+  };
+
+  // مسح جميع الفلاتر
+  const clearAllFilters = () => {
+    if (companySearchTerm.trim().length >= 2) {
+      handleSearchCompanies();
+    }
+  };
+
+  // البحث من البحثات الأخيرة
+  // تم حذف searchFromHistory بعد إلغاء البحثات الأخيرة
+
+  // معالجة تغيير نص البحث
+  const handleSearchTermChange = (value: string) => {
+    setCompanySearchTerm(value);
+    
+    // إذا كان النص فارغاً، نمسح النتائج والبيانات المعروضة
+    if (!value.trim()) {
+      setCompanySearchResults([]);
+      setCompanyNoResults(false);
+      // مسح بيانات الشركة المعروضة
+      setSelectedCompanyId('');
+      setSelectedCompanyName('');
+      setEmployees([]);
+      setPage(1);
+    }
+  };
+
+  // مسح البحث والنتائج
+  const clearSearch = () => {
+    setCompanySearchTerm('');
+    setCompanySearchResults([]);
+    setCompanyNoResults(false);
+    // مسح بيانات الشركة المعروضة
+    setSelectedCompanyId('');
+    setSelectedCompanyName('');
+    setEmployees([]);
+    setPage(1);
+  };
+
+  // تحسين البحث: تنفيذ تلقائي مع إكمال تلقائي (debounce)
+  useEffect(() => {
+    if (activeTab !== 2) return;
+    const term = companySearchTerm.trim();
+    if (term.length < 2) {
+      setCompanySearchResults([]);
+      setCompanyNoResults(false);
+      return;
+    }
+    setCompanySearchLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        await handleSearchCompanies();
+      } catch (e) {
+        console.error('❌ Error searching companies:', e);
+        setCompanySearchResults([]);
+        // لا نعرض رسالة "لا توجد نتائج" في حالة الخطأ
+        setCompanyNoResults(false);
+      } finally {
+        setCompanySearchLoading(false);
+      }
+    }, 500); // زيادة debounce time لتحسين الأداء
+    return () => clearTimeout(t);
+  }, [companySearchTerm, activeTab]);
+
+  // بحث الموظفين بالاسم (debounce) مع جلب متدرج
+  useEffect(() => {
+    if (activeTab !== 2) return;
+    if (!selectedCompanyId) return;
+    const term = (employeeSearchTerm || '').trim();
+    if (!term) {
+      setIsEmployeeSearchMode(false);
+      setEmployeeSearchLastIds([0]);
+      // إعادة تحميل القائمة العادية
+      loadData(2);
+      return;
+    }
+    // تفعيل وضع البحث وإعادة تعيين مؤشرات الترقيم
+    setIsEmployeeSearchMode(true);
+    setPage(1);
+    setEmployees([]);
+    setEmployeeSearchLastIds([0]);
+    const timer = setTimeout(() => {
+      // تحميل الصفحة الأولى من نتائج البحث
+      loadEmployeeSearchPage(1);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [employeeSearchTerm, selectedCompanyId, activeTab]);
+
+  // عند تغيير الصفحة في وضع البحث، نجلب الصفحة المطلوبة فوراً
+  // ملاحظة: لا نحتاج تأثير منفصل عند تغيير الصفحة لأن loadData يتكفّل بذلك
 
   // Export to Excel function
   const exportToExcel = () => {
@@ -314,65 +719,43 @@ const AdvancedFeatures: React.FC = () => {
       let headers: string[] = [];
 
       switch (activeTab) {
-        case 0: // Projects Data
-          headers = ['رقم المشروع', 'اسم المشروع', 'الشركة', 'الاشتراك', 'الحالة', 'التقدم', 'التكلفة', 'تاريخ البداية'];
-          worksheetData = currentData.map((item: any) => [
-            item.id,
-            item.Nameproject,
-            item.NameCompany,
-            item.NameSub,
-            item.status,
-            item.progress || 0,
-            item.cost || 0,
-            formatDate(item.ProjectStartdate)
+        case 0: // Companies Data
+          headers = ['م', 'رقم الشركة', 'اسم الشركة', 'المدينة', 'البلد', 'السجل التجاري', 'عدد الفروع المسموحة', 'تاريخ بداية الاشتراك', 'تاريخ انتهاء الاشتراك'];
+          worksheetData = currentData.map((item: any, idx: number) => [
+            getRowNumber(idx),
+            safeText(item.id),
+            safeText(item.name),
+            safeText(item.city),
+            safeText(item.country),
+            safeText(item.registrationNumber),
+            item.branchesAllowed || 0,
+            safeText(formatDate(item.subscriptionStart)),
+            safeText(formatDate(item.subscriptionEnd))
           ]);
           break;
-        case 1: // Companies Data
-          headers = ['رقم الشركة', 'اسم الشركة', 'المدينة', 'البلد', 'السجل التجاري', 'عدد الفروع المسموحة', 'تاريخ بداية الاشتراك', 'تاريخ انتهاء الاشتراك'];
-          worksheetData = currentData.map((item: any) => [
-            item.id,
-            item.NameCompany,
-            item.City,
-            item.Country,
-            item.CommercialRegistrationNumber,
-            item.NumberOFbranchesAllowed || 0,
-            formatDate(item.SubscriptionStartDate),
-            formatDate(item.SubscriptionEndDate)
+        case 1: // Subscriptions
+          headers = ['م', 'رقم الشركة', 'اسم الشركة', 'الباقة', 'المبلغ', 'تاريخ البداية', 'تاريخ الانتهاء', 'الحالة'];
+          worksheetData = currentData.map((item: any, idx: number) => [
+            getRowNumber(idx),
+            safeText(item.companyId || item.id),
+            safeText(item.companyName),
+            safeText(item.planName),
+            safeText(formatAmount(item.amount ?? 0)),
+            safeText(formatDate(item.startDate)),
+            safeText(formatDate(item.endDate)),
+            (() => { const raw = String(item.status || '').toLowerCase(); return raw === 'expired' ? 'منتهي' : raw === 'active' ? 'نشط' : safeText(item.status); })()
           ]);
           break;
-        case 2: // Recent Projects
-          headers = ['رقم المشروع', 'اسم المشروع', 'الحالة', 'التقدم', 'الشركة', 'الاشتراك'];
-          worksheetData = currentData.map((item: any) => [
-            item.id,
-            item.name,
-            item.status,
-            item.progress || 0,
-            item.companyName,
-            item.subName
-          ]);
-          break;
-        case 3: // Recent Companies
-          headers = ['رقم الشركة', 'اسم الشركة', 'المدينة', 'البلد', 'تاريخ بداية الاشتراك', 'تاريخ انتهاء الاشتراك', 'الحالة'];
-          worksheetData = currentData.map((item: any) => [
-            item.id,
-            item.NameCompany,
-            item.City,
-            item.Country,
-            formatDate(item.SubscriptionStartDate),
-            formatDate(item.SubscriptionEndDate),
-            'نشطة'
-          ]);
-          break;
-        case 4: // Subscriptions
-          headers = ['رقم الاشتراك', 'اسم الشركة', 'نوع الاشتراك', 'التكلفة', 'تاريخ البداية', 'تاريخ الانتهاء', 'الحالة'];
-          worksheetData = currentData.map((item: any) => [
-            item.id,
-            item.companyName || 'غير محدد',
-            item.type || 'اشتراك عادي',
-            item.price || 0,
-            formatDate(item.startDate),
-            formatDate(item.endDate),
-            item.status || 'active'
+        case 2: // Company Employees (tab 3 was removed)
+          headers = ['م', 'المعرف', 'الاسم', 'الوظيفة', 'القسم', 'الهاتف', 'الحالة'];
+          worksheetData = currentData.map((item: any, idx: number) => [
+            getRowNumber(idx),
+            safeText(item.id),
+            safeText(item.userName),
+            safeText(item.job),
+            safeText(item.jobHOM),
+            safeText(item.PhoneNumber),
+            String(item.Activation).toLowerCase() === 'true' ? 'نشط' : 'غير نشط'
           ]);
           break;
       }
@@ -381,8 +764,22 @@ const AdvancedFeatures: React.FC = () => {
       const ws = XLSX.utils.aoa_to_sheet([headers, ...worksheetData]);
       const wb = XLSX.utils.book_new();
       
-      // Set column widths
-      ws['!cols'] = headers.map(() => ({ wch: 15 }));
+      // Set column widths (auto width fallback)
+      try {
+        const colWidths = headers.map((h, i) => {
+          const headerLen = String(h).length;
+          const maxCellLen = worksheetData.reduce((m, row) => {
+            const v = row?.[i];
+            const s = v === undefined || v === null ? '' : String(v);
+            return Math.max(m, s.length);
+          }, headerLen);
+          // Arabic characters tend to be visually wider; add padding
+          return { wch: Math.min(Math.max(maxCellLen + 2, 12), 40) };
+        });
+        ws['!cols'] = colWidths;
+      } catch {
+        ws['!cols'] = headers.map(() => ({ wch: 15 }));
+      }
       
       XLSX.utils.book_append_sheet(wb, ws, getTabName());
       
@@ -390,7 +787,8 @@ const AdvancedFeatures: React.FC = () => {
       const fileName = `${getTabName()}_${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}.xlsx`;
       
       // Save file
-      XLSX.writeFile(wb, fileName);
+      // Ensure Excel opens Arabic text correctly by using bookType: 'xlsx'
+      XLSX.writeFile(wb, fileName, { bookType: 'xlsx' } as any);
     } catch (error) {
       console.error('خطأ في تصدير Excel:', error);
       alert('حدث خطأ في تصدير ملف Excel');
@@ -398,8 +796,10 @@ const AdvancedFeatures: React.FC = () => {
   };
 
   // Export to PDF function with Arabic support
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     try {
+      // Ensure Arabic fonts loaded
+      await loadArabicFont();
       const currentData = getCurrentTabData();
       if (currentData.length === 0) {
         alert('لا توجد بيانات للتصدير');
@@ -407,79 +807,96 @@ const AdvancedFeatures: React.FC = () => {
       }
 
       const doc = new jsPDF('l', 'mm', 'a4'); // Landscape orientation
+      // Register and use Tajawal font if available
+      try {
+        if (TAJAWAL_REG_BASE64) {
+          (doc as any).addFileToVFS('Tajawal-Regular.ttf', TAJAWAL_REG_BASE64);
+          (doc as any).addFont('Tajawal-Regular.ttf', 'Tajawal', 'normal');
+        }
+        if (TAJAWAL_BOLD_BASE64) {
+          (doc as any).addFileToVFS('Tajawal-Bold.ttf', TAJAWAL_BOLD_BASE64);
+          (doc as any).addFont('Tajawal-Bold.ttf', 'Tajawal', 'bold');
+        }
+        (doc as any).setFont('Tajawal', 'normal');
+        if ((doc as any).setR2L) {
+          (doc as any).setR2L(true);
+        }
+      } catch {}
       
-      // Add title
-      doc.setFontSize(16);
-      doc.text(`Report: ${getTabName()}`, 200, 20, { align: 'center' });
+      // Header styling
+      const title = getTabName();
+      const dateStr = new Date().toLocaleDateString('en-GB');
+      doc.setFillColor(41, 128, 185);
+      doc.rect(0, 0, doc.internal.pageSize.getWidth(), 20, 'F');
+      doc.setTextColor(255);
+      doc.setFontSize(14);
+      doc.text(`تقرير: ${title}`, 10, 12);
+      doc.setFontSize(10);
+      doc.text(`التاريخ: ${dateStr}`, doc.internal.pageSize.getWidth() - 10, 12, { align: 'right' });
+      doc.setTextColor(0);
       
-      // Add date
-      doc.setFontSize(12);
-      doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 200, 30, { align: 'center' });
-      
-      // Prepare table data
+      // Try rendering the visible table directly as HTML to preserve Arabic shaping
+      const el = document.getElementById('pdf-export');
+      if (el && (doc as any).html) {
+        await (doc as any).html(el, {
+          x: 10,
+          y: 24,
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+          callback: (d: any) => {
+            // Footer summary
+            const finalY = 190; // approximate
+            d.setFontSize(10);
+            d.text(`إجمالي السجلات المصدّرة: ${currentData.length}`, 10, finalY + 15);
+            d.text(`تم التصدير في: ${new Date().toLocaleString('en-GB')}`, 10, finalY + 22);
+            const fileName = `${title}_${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}.pdf`;
+            d.save(fileName);
+          }
+        });
+        return;
+      }
+
+      // Prepare table data (fallback)
       let columns: string[] = [];
       let rows: any[][] = [];
 
       switch (activeTab) {
-        case 0: // Projects Data
-          columns = ['Project ID', 'Project Name', 'Company', 'Subscription', 'Status', 'Progress', 'Cost', 'Start Date'];
-          rows = currentData.map((item: any) => [
-            item.id || '',
-            (item.Nameproject || '').substring(0, 20),
-            (item.NameCompany || '').substring(0, 15),
-            (item.NameSub || '').substring(0, 15),
-            item.status || '',
-            `${item.progress || 0}%`,
-            `${item.cost || 0} SAR`,
-            formatDate(item.ProjectStartdate)
+        case 0: // Companies Data
+          columns = ['#', 'رقم الشركة', 'اسم الشركة', 'المدينة', 'الدولة', 'السجل', 'الفروع المسموحة', 'بداية الاشتراك', 'نهاية الاشتراك'];
+          rows = currentData.map((item: any, idx: number) => [
+            getRowNumber(idx),
+            safeText(item.id),
+            safeText(item.name, 20),
+            safeText(item.city, 12),
+            safeText(item.country, 12),
+            safeText(item.registrationNumber, 20),
+            item.branchesAllowed || 0,
+            safeText(formatDate(item.subscriptionStart)),
+            safeText(formatDate(item.subscriptionEnd))
           ]);
           break;
-        case 1: // Companies Data
-          columns = ['Company ID', 'Company Name', 'City', 'Country', 'Registration', 'Branches Allowed', 'Start Date', 'End Date'];
-          rows = currentData.map((item: any) => [
-            item.id || '',
-            (item.NameCompany || '').substring(0, 15),
-            (item.City || '').substring(0, 10),
-            (item.Country || '').substring(0, 10),
-            (item.CommercialRegistrationNumber || '').substring(0, 15),
-            item.NumberOFbranchesAllowed || 0,
-            formatDate(item.SubscriptionStartDate),
-            formatDate(item.SubscriptionEndDate)
+        case 1: // Subscriptions
+          columns = ['#', 'رقم الشركة', 'اسم الشركة', 'الباقة', 'المبلغ', 'تاريخ البداية', 'تاريخ النهاية', 'الحالة'];
+          rows = currentData.map((item: any, idx: number) => [
+            getRowNumber(idx),
+            safeText(item.id),
+            safeText(item.companyName, 20),
+            safeText(item.planName, 15),
+            `${item.amount || 0} SAR`,
+            safeText(formatDate(item.startDate)),
+            safeText(formatDate(item.endDate)),
+            safeText(item.status || 'نشط')
           ]);
           break;
-        case 2: // Recent Projects
-          columns = ['Project ID', 'Project Name', 'Status', 'Progress', 'Company', 'Subscription'];
-          rows = currentData.map((item: any) => [
-            item.id || '',
-            (item.name || '').substring(0, 20),
-            item.status || '',
-            `${item.progress || 0}%`,
-            (item.companyName || '').substring(0, 15),
-            (item.subName || '').substring(0, 15)
-          ]);
-          break;
-        case 3: // Recent Companies
-          columns = ['Company ID', 'Company Name', 'City', 'Country', 'Start Date', 'End Date', 'Status'];
-          rows = currentData.map((item: any) => [
-            item.id || '',
-            (item.NameCompany || '').substring(0, 15),
-            (item.City || '').substring(0, 10),
-            (item.Country || '').substring(0, 10),
-            formatDate(item.SubscriptionStartDate),
-            formatDate(item.SubscriptionEndDate),
-            'Active'
-          ]);
-          break;
-        case 4: // Subscriptions
-          columns = ['Sub ID', 'Company Name', 'Type', 'Price', 'Start Date', 'End Date', 'Status'];
-          rows = currentData.map((item: any) => [
-            item.id || '',
-            (item.companyName || 'Unknown').substring(0, 15),
-            (item.type || 'Standard').substring(0, 15),
-            `${item.price || 0} SAR`,
-            formatDate(item.startDate),
-            formatDate(item.endDate),
-            item.status || 'active'
+        case 2: // Company Employees
+          columns = ['#', 'المعرف', 'الاسم', 'الوظيفة', 'القسم', 'الهاتف', 'الحالة'];
+          rows = currentData.map((item: any, idx: number) => [
+            getRowNumber(idx),
+            safeText(item.id),
+            safeText(item.userName, 20),
+            safeText(item.job, 15),
+            safeText(item.jobHOM, 15),
+            safeText(item.PhoneNumber),
+            safeText(String(item.Activation).toLowerCase() === 'true' ? 'نشط' : 'غير نشط')
           ]);
           break;
       }
@@ -488,30 +905,35 @@ const AdvancedFeatures: React.FC = () => {
       (doc as any).autoTable({
         head: [columns],
         body: rows,
-        startY: 40,
+        startY: 28,
         theme: 'grid',
         styles: {
-          fontSize: 8,
-          cellPadding: 2,
+          font: 'Tajawal',
+          fontSize: 10,
+          cellPadding: 3,
+          halign: 'right',
+          overflow: 'linebreak'
         },
         headStyles: {
           fillColor: [41, 128, 185],
           textColor: 255,
-          fontSize: 9,
+          font: 'Tajawal',
+          fontSize: 11,
           fontStyle: 'bold'
         },
         alternateRowStyles: {
-          fillColor: [245, 245, 245]
+          fillColor: [248, 248, 248]
+        },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 10 }
         }
       });
 
-      // Add statistics
+      // Footer summary
       const finalY = (doc as any).lastAutoTable?.finalY || 100;
-      doc.setFontSize(12);
-      doc.text('Statistics:', 20, finalY + 20);
       doc.setFontSize(10);
-      doc.text(`Total Records: ${currentData.length}`, 20, finalY + 30);
-      doc.text(`Export Date: ${new Date().toLocaleString('en-GB')}`, 20, finalY + 40);
+      doc.text(`إجمالي السجلات المصدّرة: ${currentData.length}`, 10, finalY + 15);
+      doc.text(`تم التصدير في: ${new Date().toLocaleString('en-GB')}`, 10, finalY + 22);
 
       // Save PDF
       const fileName = `${getTabName()}_${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}.pdf`;
@@ -522,186 +944,92 @@ const AdvancedFeatures: React.FC = () => {
     }
   };
 
-  // مكون pagination محسن للمميزات المتقدمة
+  // شريط تنقل سفلي محسّن الشكل
   const renderAdvancedPaginationControls = () => {
     if (totalItems === 0) {
       return (
-        <Box sx={{ mt: 3, p: 2, bgcolor: 'warning.light', borderRadius: 1, textAlign: 'center' }}>
-          <Typography variant="body2" color="warning.contrastText">
+        <Paper elevation={1} sx={{ mt: 3, p: 2, borderRadius: (theme) => theme.shape.borderRadius, textAlign: 'center' }}>
+          <Typography variant="body2" color="text.secondary">
             📭 لا توجد بيانات لعرضها في هذا التبويب
           </Typography>
-        </Box>
+        </Paper>
       );
     }
 
     const startIndex = (page - 1) * itemsPerPage + 1;
     const endIndex = Math.min(page * itemsPerPage, totalItems);
 
-    if (totalPages === 1) {
-      return (
-        <Box sx={{ mt: 3, p: 2, bgcolor: 'info.light', borderRadius: 1, textAlign: 'center' }}>
-          <Typography variant="body2" color="info.contrastText">
-            📄 صفحة واحدة فقط - عرض {totalItems} عنصر من أصل {totalItems}
-          </Typography>
-        </Box>
-      );
-    }
-
     return (
-      <Box sx={{ mt: 3, p: 2, bgcolor: 'primary.light', borderRadius: 1 }}>
+      <Paper elevation={2} sx={{ mt: 3, p: 2, borderRadius: (theme) => theme.shape.borderRadius, boxShadow: '0 6px 20px rgba(0,0,0,0.06)' }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={6} md={3}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2" color="primary.contrastText">
-                📄 {itemsPerPage} عنصر لكل صفحة
-              </Typography>
+          <Grid item xs={12} md={4}>
+            <Box />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={(e, value) => setPage(value)}
+                color="primary"
+                shape="rounded"
+                siblingCount={1}
+                boundaryCount={0}
+                showFirstButton
+                showLastButton
+              />
             </Box>
           </Grid>
-          
-          <Grid item xs={12} sm={6} md={6}>
-            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
-              <Button
-                size="small"
-                variant="outlined"
-                disabled={page === 1}
-                onClick={() => setPage(page - 1)}
-                sx={{ color: 'primary.contrastText', borderColor: 'primary.contrastText' }}
-              >
-                السابق
-              </Button>
-              
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (page <= 3) {
-                  pageNum = i + 1;
-                } else if (page >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = page - 2 + i;
-                }
-                
-                return (
-                  <Button
-                    key={pageNum}
-                    size="small"
-                    variant={page === pageNum ? 'contained' : 'outlined'}
-                    onClick={() => setPage(pageNum)}
-                    sx={{ 
-                      minWidth: 40,
-                      color: page === pageNum ? 'primary.main' : 'primary.contrastText',
-                      borderColor: 'primary.contrastText',
-                      bgcolor: page === pageNum ? 'white' : 'transparent'
-                    }}
-                  >
-                    {pageNum}
-                  </Button>
-                );
-              })}
-              
-              <Button
-                size="small"
-                variant="outlined"
-                disabled={page === totalPages}
-                onClick={() => setPage(page + 1)}
-                sx={{ color: 'primary.contrastText', borderColor: 'primary.contrastText' }}
-              >
-                التالي
-              </Button>
-            </Box>
-          </Grid>
-          
-          <Grid item xs={12} sm={12} md={3}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <Typography variant="body2" color="primary.contrastText">
-                عرض {startIndex} - {endIndex} من {totalItems} عنصر
-              </Typography>
-              <Typography variant="body2" color="secondary.main" sx={{ fontWeight: 'bold' }}>
-                📋 إجمالي الصفحات: {totalPages}
-              </Typography>
+          <Grid item xs={12} md={4}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+              <Chip label={`الصفحة ${page} من ${totalPages}`} color="primary" variant="outlined" />
             </Box>
           </Grid>
         </Grid>
-      </Box>
+      </Paper>
     );
   };
 
-  const renderStageNotes = () => (
-    <TableContainer component={Paper}>
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell>رقم المشروع</TableCell>
-            <TableCell>اسم المشروع</TableCell>
-            <TableCell>الشركة</TableCell>
-            <TableCell>الاشتراك</TableCell>
-            <TableCell>الحالة</TableCell>
-            <TableCell>التقدم</TableCell>
-            <TableCell>التكلفة</TableCell>
-            <TableCell>تاريخ البداية</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {stageNotes.map((project: any) => (
-            <TableRow key={project.id}>
-              <TableCell>{project.id}</TableCell>
-              <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {project.Nameproject}
-              </TableCell>
-              <TableCell>{project.NameCompany}</TableCell>
-              <TableCell>{project.NameSub}</TableCell>
-              <TableCell>{getStatusChip(project.status)}</TableCell>
-              <TableCell>
-                <Chip 
-                  label={`${project.progress || 0}%`} 
-                  color={project.progress > 50 ? 'success' : 'warning'} 
-                  size="small" 
-                />
-              </TableCell>
-              <TableCell>{formatAmount(project.cost || 0)}</TableCell>
-              <TableCell>{formatDate(project.ProjectStartdate)}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
+  // تمت إزالة تبويب بيانات المشاريع
 
   const renderRequests = () => (
-    <TableContainer component={Paper}>
-      <Table>
+    <TableContainer component={Paper} sx={{ width: '100%', overflowX: 'auto' }}>
+      <Table size="small" sx={{ minWidth: { xs: 600, md: 960 }, tableLayout: 'fixed', '& th, & td': { whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', fontSize: { xs: '0.85rem', sm: '0.95rem' }, py: { xs: 0.75, sm: 1 } } }}>
         <TableHead>
           <TableRow>
+            <TableCell>م</TableCell>
             <TableCell>رقم الشركة</TableCell>
             <TableCell>اسم الشركة</TableCell>
-            <TableCell>المدينة</TableCell>
-            <TableCell>البلد</TableCell>
-            <TableCell>السجل التجاري</TableCell>
-            <TableCell>عدد الفروع المسموحة</TableCell>
-            <TableCell>تاريخ بداية الاشتراك</TableCell>
-            <TableCell>تاريخ انتهاء الاشتراك</TableCell>
+            <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>المدينة</TableCell>
+            <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>البلد</TableCell>
+            <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>السجل التجاري</TableCell>
+            <TableCell>الفروع</TableCell>
+            <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>بداية الاشتراك</TableCell>
+            <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>نهاية الاشتراك</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
-          {requests.map((company: any) => (
+          {requests.map((company: any, idx: number) => (
             <TableRow key={company.id}>
-              <TableCell>{company.id}</TableCell>
-              <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {company.NameCompany}
+              <TableCell>{getRowNumber(idx)}</TableCell>
+              <TableCell>{safeText(company.id)}</TableCell>
+              <TableCell sx={{ maxWidth: 200 }}>
+                <Tooltip title={safeText(company.name)} arrow placement="top">
+                  <span style={{ display: 'inline-block', maxWidth: '100%' }}>{safeText(company.name)}</span>
+                </Tooltip>
               </TableCell>
-              <TableCell>{company.City}</TableCell>
-              <TableCell>{company.Country}</TableCell>
-              <TableCell>{company.CommercialRegistrationNumber}</TableCell>
+              <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{safeText(company.city)}</TableCell>
+              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{safeText(company.country)}</TableCell>
+              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{safeText(company.registrationNumber)}</TableCell>
               <TableCell>
                 <Chip 
-                  label={company.NumberOFbranchesAllowed || 0} 
+                  label={company.branchesAllowed || 0} 
                   color="primary" 
                   size="small" 
                 />
               </TableCell>
-              <TableCell>{formatDate(company.SubscriptionStartDate)}</TableCell>
-              <TableCell>{formatDate(company.SubscriptionEndDate)}</TableCell>
+              <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{safeText(formatDate(company.subscriptionStart))}</TableCell>
+              <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{safeText(formatDate(company.subscriptionEnd))}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -709,110 +1037,38 @@ const AdvancedFeatures: React.FC = () => {
     </TableContainer>
   );
 
-  const renderReturns = () => (
-    <TableContainer component={Paper}>
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell>رقم المشروع</TableCell>
-            <TableCell>اسم المشروع</TableCell>
-            <TableCell>الحالة</TableCell>
-            <TableCell>التقدم</TableCell>
-            <TableCell>الشركة</TableCell>
-            <TableCell>الاشتراك</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {returns.map((project: any) => (
-            <TableRow key={project.id}>
-              <TableCell>{project.id}</TableCell>
-              <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {project.name}
-              </TableCell>
-              <TableCell>{getStatusChip(project.status)}</TableCell>
-              <TableCell>
-                <Chip 
-                  label={`${project.progress || 0}%`} 
-                  color={project.progress > 50 ? 'success' : 'warning'} 
-                  size="small" 
-                />
-              </TableCell>
-              <TableCell>{project.companyName}</TableCell>
-              <TableCell>{project.subName}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
+  // تمت إزالة نشاطات الدخول
 
   const renderRevenue = () => (
-    <TableContainer component={Paper}>
-      <Table>
+    <TableContainer component={Paper} sx={{ width: '100%', overflowX: 'auto' }}>
+      <Table size="small" sx={{ minWidth: { xs: 600, md: 960 }, tableLayout: 'fixed', '& th, & td': { whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', fontSize: { xs: '0.85rem', sm: '0.95rem' }, py: { xs: 0.75, sm: 1 } } }}>
         <TableHead>
           <TableRow>
+            <TableCell>م</TableCell>
             <TableCell>رقم الشركة</TableCell>
             <TableCell>اسم الشركة</TableCell>
-            <TableCell>المدينة</TableCell>
-            <TableCell>البلد</TableCell>
-            <TableCell>تاريخ بداية الاشتراك</TableCell>
-            <TableCell>تاريخ انتهاء الاشتراك</TableCell>
-            <TableCell>حالة الشركة</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {revenue.map((company: any) => (
-            <TableRow key={company.id}>
-              <TableCell>{company.id}</TableCell>
-              <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {company.NameCompany}
-              </TableCell>
-              <TableCell>{company.City}</TableCell>
-              <TableCell>{company.Country}</TableCell>
-              <TableCell>{formatDate(company.SubscriptionStartDate)}</TableCell>
-              <TableCell>{formatDate(company.SubscriptionEndDate)}</TableCell>
-              <TableCell>
-                <Chip 
-                  label="نشطة" 
-                  color="success" 
-                  size="small" 
-                />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
-
-
-
-  const renderFinancialCustody = () => (
-    <TableContainer component={Paper}>
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell>رقم الاشتراك</TableCell>
-            <TableCell>اسم الشركة</TableCell>
-            <TableCell>نوع الاشتراك</TableCell>
-            <TableCell>التكلفة</TableCell>
-            <TableCell>تاريخ البداية</TableCell>
-            <TableCell>تاريخ الانتهاء</TableCell>
+            <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>الباقة</TableCell>
+            <TableCell>المبلغ</TableCell>
+            <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>تاريخ البداية</TableCell>
+            <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>تاريخ الانتهاء</TableCell>
             <TableCell>الحالة</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
-          {financialCustody.map((subscription: any) => (
-            <TableRow key={subscription.id}>
-              <TableCell>{subscription.id}</TableCell>
-              <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {subscription.companyName || 'غير محدد'}
+          {subscriptions.map((sub: any, idx: number) => (
+            <TableRow key={sub.id}>
+              <TableCell>{getRowNumber(idx)}</TableCell>
+              <TableCell>{safeText(sub.companyId || sub.id)}</TableCell>
+              <TableCell sx={{ maxWidth: 200 }}>
+                <Tooltip title={safeText(sub.companyName)} arrow placement="top">
+                  <span style={{ display: 'inline-block', maxWidth: '100%' }}>{safeText(sub.companyName)}</span>
+                </Tooltip>
               </TableCell>
-              <TableCell>{subscription.type || 'اشتراك عادي'}</TableCell>
-              <TableCell>{formatAmount(subscription.price || 0)}</TableCell>
-              <TableCell>{formatDate(subscription.startDate)}</TableCell>
-              <TableCell>{formatDate(subscription.endDate)}</TableCell>
-              <TableCell>{getStatusChip(subscription.status || 'active')}</TableCell>
+              <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{safeText(sub.planName)}</TableCell>
+              <TableCell>{formatAmount(sub.amount || 0)}</TableCell>
+              <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{safeText(formatDate(sub.startDate))}</TableCell>
+              <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{safeText(formatDate(sub.endDate))}</TableCell>
+              <TableCell>{getStatusChip(sub.status)}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -820,77 +1076,88 @@ const AdvancedFeatures: React.FC = () => {
     </TableContainer>
   );
 
+  // تم حذف تبويب قوالب المراحل بالكامل
+
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+    <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
         <Typography variant="h4" component="h1">
           الميزات المتقدمة
         </Typography>
-        <Chip 
-          label={loading ? 'جاري التحميل...' : `إجمالي السجلات: ${totalItems}`}
-          color="primary" 
-          variant="outlined"
-          sx={{ fontSize: '1rem', fontWeight: 'bold' }}
-          icon={loading ? <CircularProgress size={16} /> : undefined}
-        />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+          <Chip 
+            label={loading ? 'جاري التحميل...' : `إجمالي السجلات: ${totalItems}`}
+            color="primary" 
+            variant="outlined"
+            sx={{ fontSize: '0.95rem', fontWeight: 'bold' }}
+            icon={loading ? <CircularProgress size={16} /> : undefined}
+          />
+          <Tooltip title="تصدير إلى Excel" arrow>
+            <span>
+              <Button
+                onClick={exportToExcel}
+                variant="outlined"
+                color="success"
+                startIcon={<ExcelIcon />}
+                disabled={getCurrentTabData().length === 0 || loading}
+                sx={{ borderRadius: 2, textTransform: 'none' }}
+              >
+                Excel
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title="طباعة PDF (موصى بها)" arrow>
+            <span>
+              <Button
+                onClick={printToPDF}
+                variant="outlined"
+                color="error"
+                startIcon={<PdfIcon />}
+                disabled={getCurrentTabData().length === 0 || loading}
+                sx={{ borderRadius: 2, textTransform: 'none' }}
+              >
+                PDF
+              </Button>
+            </span>
+          </Tooltip>
+        </Box>
       </Box>
       
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ mb: 3, display: 'none' }}>
         <CardContent>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="فلترة حسب رقم المشروع"
-                value={projectFilter}
-                onChange={(e) => handleProjectFilterChange(e.target.value)}
-                size="small"
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth size="small">
-                <InputLabel>فلترة حسب الحالة</InputLabel>
-                <Select
-                  value={statusFilter}
-                  onChange={(e) => handleStatusFilterChange(e.target.value)}
-                  label="فلترة حسب الحالة"
-                >
-                  <MenuItem value="">الكل</MenuItem>
-                  <MenuItem value="true">مكتمل</MenuItem>
-                  <MenuItem value="false">معلق</MenuItem>
-                  <MenuItem value="approved">موافق عليه</MenuItem>
-                  <MenuItem value="rejected">مرفوض</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <ButtonGroup variant="contained" fullWidth disabled={loading}>
-                <Button 
-                  onClick={() => loadData(activeTab)}
-                  sx={{ flexGrow: 2 }}
-                >
-                  تحديث البيانات
-                </Button>
-                <Button 
-                  onClick={exportToExcel}
-                  startIcon={<ExcelIcon />}
-                  disabled={getCurrentTabData().length === 0}
-                  color="success"
-                  title="تصدير إلى Excel"
-                >
-                  Excel
-                </Button>
-                <Button 
-                  onClick={exportToPDF}
-                  startIcon={<PdfIcon />}
-                  disabled={getCurrentTabData().length === 0}
-                  color="error"
-                  title="تصدير إلى PDF"
-                >
-                  PDF
-                </Button>
-              </ButtonGroup>
-            </Grid>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={12}>
+                <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  <Tooltip title="تصدير إلى Excel" arrow>
+                    <span>
+                      <Button
+                        onClick={exportToExcel}
+                        variant="outlined"
+                        color="success"
+                        startIcon={<ExcelIcon />}
+                        disabled={getCurrentTabData().length === 0 || loading}
+                        sx={{ borderRadius: 2, textTransform: 'none' }}
+                      >
+                        تصدير Excel
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="تصدير إلى PDF" arrow>
+                    <span>
+                      <Button
+                        onClick={exportToPDF}
+                        variant="outlined"
+                        color="error"
+                        startIcon={<PdfIcon />}
+                        disabled={getCurrentTabData().length === 0 || loading}
+                        sx={{ borderRadius: 2, textTransform: 'none' }}
+                      >
+                        تصدير PDF
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </Box>
+              </Grid>
           </Grid>
         </CardContent>
       </Card>
@@ -901,42 +1168,206 @@ const AdvancedFeatures: React.FC = () => {
         </Alert>
       )}
 
-      <Alert severity="info" sx={{ mb: 3 }}>
-        <Typography variant="body2">
-          📅 <strong>ملاحظة:</strong> جميع التواريخ معروضة بالتقويم الميلادي • 📊 يمكنك تصدير البيانات بصيغة Excel أو PDF • 📄 يتم عرض 10 عناصر لكل صفحة 
-          {totalPages > 1 && ` • 📑 ${totalPages} صفحة متاحة للتنقل`}
-          {totalPages === 1 && totalItems > 0 && ` • 📄 صفحة واحدة فقط (${totalItems} عنصر)`}
-        </Typography>
-      </Alert>
-
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs value={activeTab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
-          <Tab icon={<NotesIcon />} label="بيانات المشاريع" />
+        <Tabs value={activeTab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
           <Tab icon={<AssignmentIcon />} label="بيانات الشركات" />
-          <Tab icon={<ReceiptIcon />} label="المشاريع الحديثة" />
-          <Tab icon={<MoneyIcon />} label="الشركات المشتركة" />
-          <Tab icon={<BalanceIcon />} label="بيانات الاشتراكات" />
+          <Tab icon={<MoneyIcon />} label="الاشتراكات" />
+          <Tab icon={<AssignmentIcon />} label="مستخدمين الشركة" />
         </Tabs>
       </Box>
 
       <TabPanel value={activeTab} index={0}>
-        {loading ? <Skeleton variant="rectangular" height={400} /> : renderStageNotes()}
-      </TabPanel>
-      
-      <TabPanel value={activeTab} index={1}>
         {loading ? <Skeleton variant="rectangular" height={400} /> : renderRequests()}
       </TabPanel>
       
-      <TabPanel value={activeTab} index={2}>
-        {loading ? <Skeleton variant="rectangular" height={400} /> : renderReturns()}
-      </TabPanel>
-      
-      <TabPanel value={activeTab} index={3}>
+      <TabPanel value={activeTab} index={1}>
         {loading ? <Skeleton variant="rectangular" height={400} /> : renderRevenue()}
       </TabPanel>
       
-      <TabPanel value={activeTab} index={4}>
-        {loading ? <Skeleton variant="rectangular" height={400} /> : renderFinancialCustody()}
+      <TabPanel value={activeTab} index={2}>
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
+            <Grid container spacing={3}>
+              {/* البحث الأساسي */}
+              <Grid item xs={12} md={8}>
+                <Box sx={{ position: 'relative' }}>
+                  <Autocomplete
+                    options={companySearchResults}
+                    loading={companySearchLoading}
+                    getOptionLabel={(option: any) => `${option.name || ''}${option.city ? ` - ${option.city}` : ''}${option.country ? ` (${option.country})` : ''}`}
+                    value={companySearchResults.find((o) => String(o.id) === String(selectedCompanyId)) || null}
+                    onChange={(e, value) => { 
+                      if (value) {
+                        handleSelectCompany(value);
+                      } else {
+                        // إذا تم مسح الشركة، نمسح البيانات المعروضة
+                        setSelectedCompanyId('');
+                        setSelectedCompanyName('');
+                        setEmployees([]);
+                        setPage(1);
+                      }
+                    }}
+                    onInputChange={(e, value) => handleSearchTermChange(value)}
+                    inputValue={companySearchTerm}
+                    clearOnBlur={false}
+                    freeSolo={false}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="ابحث واختر الشركة"
+                        placeholder="اكتب اسم الشركة أو المدينة أو السجل التجاري..."
+                        size="medium"
+                        fullWidth
+                        InputProps={{
+                          ...params.InputProps,
+                          endAdornment: (
+                            <>
+                              {companySearchLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                              {companySearchTerm && (
+                                <Button
+                                  size="small"
+                                  onClick={clearSearch}
+                                  sx={{ minWidth: 'auto', p: 0.5 }}
+                                >
+                                  ✕
+                                </Button>
+                              )}
+                              {params.InputProps.endAdornment}
+                            </>
+                          ),
+                        }}
+                      />
+                    )}
+                    renderOption={(props, option: any) => {
+                      const { key, ...otherProps } = props;
+                      return (
+                        <Box component="li" key={key} {...otherProps}>
+                          <Box sx={{ width: '100%' }}>
+                            <Typography variant="subtitle1" fontWeight="bold">
+                              {option.name}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {option.city && option.country ? `${option.city}, ${option.country}` : option.city || option.country}
+                            </Typography>
+                            {option.registrationNumber && (
+                              <Typography variant="caption" color="text.secondary">
+                                السجل: {option.registrationNumber}
+                              </Typography>
+                            )}
+                            {option.subscriptionEnd && (
+                              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                                • ينتهي: {formatDate(option.subscriptionEnd)}
+                              </Typography>
+                            )}
+                          </Box>
+                        </Box>
+                      );
+                    }}
+                  />
+                  
+                </Box>
+              </Grid>
+              
+              {/* عرض معلومات الشركة المحددة */}
+              <Grid item xs={12} md={4}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {selectedCompanyName ? (
+                    <Box sx={{ p: 2, backgroundColor: '#e3f2fd', borderRadius: 2, border: '1px solid #2196f3' }}>
+                      <Typography variant="subtitle2" color="primary" fontWeight="bold" sx={{ mb: 1 }}>
+                        🏢 الشركة المحددة
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 0.5 }}>
+                        <strong>الاسم:</strong> {selectedCompanyName}
+                      </Typography>
+                      {companySearchResults.find(c => String(c.id) === String(selectedCompanyId))?.city && (
+                        <Typography variant="body2" sx={{ mb: 0.5 }}>
+                          <strong>المدينة:</strong> {companySearchResults.find(c => String(c.id) === String(selectedCompanyId))?.city}
+                        </Typography>
+                      )}
+                      {companySearchResults.find(c => String(c.id) === String(selectedCompanyId))?.country && (
+                        <Typography variant="body2">
+                          <strong>الدولة:</strong> {companySearchResults.find(c => String(c.id) === String(selectedCompanyId))?.country}
+                        </Typography>
+                      )}
+                    </Box>
+                  ) : null}
+                </Box>
+              </Grid>
+
+              {/* حقل بحث الموظفين بالاسم أو الهاتف */}
+              {selectedCompanyId ? (
+                <Grid item xs={12} md={8}>
+                  <TextField
+                    label="ابحث عن مستخدم (اسم أو رقم هاتف)"
+                    placeholder="ابحث عن مستخدم (اسم أو رقم هاتف)"
+                    size="medium"
+                    fullWidth
+                    value={employeeSearchTerm}
+                    onChange={(e) => setEmployeeSearchTerm(e.target.value)}
+                    InputProps={{
+                      endAdornment: (
+                        <>
+                          {employeeSearchLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                          {employeeSearchTerm && (
+                            <Button
+                              size="small"
+                              onClick={() => setEmployeeSearchTerm('')}
+                              sx={{ minWidth: 'auto', p: 0.5 }}
+                            >
+                              ✕
+                            </Button>
+                          )}
+                        </>
+                      )
+                    }}
+                  />
+                </Grid>
+              ) : null}
+
+              {/* تم إزالة قسم "البحثات الأخيرة" */}
+
+              {/* رسائل الحالة */}
+              {/* تم إزالة رسالة "لا توجد نتائج" لحل مشكلة ظهورها مع وجود نتائج */}
+
+              {/* إحصائيات البحث */}
+              {/* تم إزالة إحصائيات البحث لحل مشكلة ظهورها عند اختيار شركة */}
+
+            </Grid>
+          </CardContent>
+        </Card>
+
+        {selectedCompanyId ? (
+          <TableContainer component={Paper} id="pdf-export" sx={{ width: '100%', overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: { xs: 600, md: 960 }, tableLayout: 'fixed', '& th, & td': { whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', fontSize: { xs: '0.85rem', sm: '0.95rem' }, py: { xs: 0.75, sm: 1 } } }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>م</TableCell>
+                  <TableCell>المعرف</TableCell>
+                  <TableCell>الاسم</TableCell>
+                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>الوظيفة</TableCell>
+                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>القسم</TableCell>
+                  <TableCell>الهاتف</TableCell>
+                  <TableCell>الحالة</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {employees.map((emp: any, idx: number) => (
+                  <TableRow key={emp.id || idx}>
+                    <TableCell>{getRowNumber(idx)}</TableCell>
+                    <TableCell>{emp.id}</TableCell>
+                    <TableCell sx={{ maxWidth: 200 }}>{emp.userName}</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{emp.job}</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{emp.jobHOM}</TableCell>
+                    <TableCell>{emp.PhoneNumber}</TableCell>
+                    <TableCell>{getStatusChip(String(emp.Activation))}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        ) : (
+          <Alert severity="info">اختر شركة لعرض مستخدمينها</Alert>
+        )}
       </TabPanel>
 
       {renderAdvancedPaginationControls()}
@@ -945,4 +1376,3 @@ const AdvancedFeatures: React.FC = () => {
 };
 
 export default AdvancedFeatures;
- 

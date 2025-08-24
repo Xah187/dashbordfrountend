@@ -1276,6 +1276,9 @@ const Users = () => {
               MenuListProps={{
                 'aria-labelledby': 'filter-button',
               }}
+              PaperProps={{
+                sx: { borderRadius: (theme) => `${theme.shape.borderRadius}px` }
+              }}
             >
               <MenuItem 
                 onClick={() => handleApplyFilter('all')}
@@ -1522,6 +1525,7 @@ const Users = () => {
         MenuListProps={{
           'aria-labelledby': 'basic-button',
         }}
+        PaperProps={{ sx: { borderRadius: (theme) => `${theme.shape.borderRadius}px` } }}
       >
         <MenuItem onClick={() => handleViewUserDetails(selectedId)}>
           <VisibilityIcon fontSize="small" sx={{ mr: 1 }} />

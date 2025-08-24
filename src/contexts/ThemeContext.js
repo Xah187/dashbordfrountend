@@ -1,5 +1,5 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
-import { createTheme, ThemeProvider as MuiThemeProvider } from '@mui/material';
+import React, { createContext, useState, useContext, useEffect, useMemo } from 'react';
+import { createTheme, ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import SecureStorage from '../utils/secureStorage';
 import Logger from '../utils/logger';
 import { brandColors } from '../utils/colorUtils';
@@ -26,7 +26,6 @@ export const ThemeProvider = ({ children }) => {
       if (savedSettings) {
         try {
           const parsedSettings = JSON.parse(savedSettings);
-          console.log('تم استرجاع إعدادات مخصصة من التخزين:', parsedSettings);
           return parsedSettings;
         } catch (parseError) {
           console.error('خطأ في تحليل الإعدادات المحفوظة:', parseError);
@@ -36,7 +35,6 @@ export const ThemeProvider = ({ children }) => {
       console.error('خطأ في استرجاع إعدادات السمة:', error);
     }
     
-    console.log('استخدام إعدادات افتراضية لعدم وجود إعدادات محفوظة');
     return defaultSettings;
   });
 
@@ -57,13 +55,11 @@ export const ThemeProvider = ({ children }) => {
   // تطبيق الإعدادات المطلوبة عند بدء التشغيل
   useEffect(() => {
     // للتأكد من أن الإعدادات تُطبَق بشكل صحيح
-    console.log('حالة الإعدادات عند بدء التشغيل:', settings);
   }, []);
   
   // التأكد من تطبيق التغييرات في الإعدادات
   useEffect(() => {
     // هذه الوظيفة ستشغل في كل مرة تتغير فيها الإعدادات
-    console.log('تم تحديث إعدادات السمة:', settings);
   }, [settings]);
 
   const toggleDarkMode = () => {
@@ -78,8 +74,6 @@ export const ThemeProvider = ({ children }) => {
 
   const updateThemeSettings = (newSettings) => {
     try {
-      console.log('بدء تحديث إعدادات السمة:', newSettings);
-      
       // تمييز الإعدادات بختم زمني لضمان التحديث
       const timestamp = new Date().getTime();
       
@@ -90,27 +84,16 @@ export const ThemeProvider = ({ children }) => {
         lastUpdated: timestamp // إضافة ختم زمني
       };
       
-      // تسجيل التغييرات التي سيتم تطبيقها
-      console.log('تطبيق الإعدادات المخصصة:', {
-        fontSize: updatedSettings.fontSize,
-        highContrast: updatedSettings.highContrast,
-        borderRadius: updatedSettings.borderRadius,
-        roundedCorners: updatedSettings.roundedCorners,
-        primaryColor: updatedSettings.primaryColor
-      });
-      
       // تطبيق التغييرات على state أولاً
       setSettings(updatedSettings);
       
       // ثم حفظ الإعدادات في التخزين المحلي
       localStorage.setItem('themeSettings', JSON.stringify(updatedSettings));
-      console.log('تم حفظ الإعدادات في التخزين المحلي');
       
       // إذا تم تغيير وضع الألوان الداكنة، قم بتحديثه أيضًا
       if (newSettings.hasOwnProperty('darkMode') && newSettings.darkMode !== darkMode) {
         localStorage.setItem('darkMode', newSettings.darkMode);
         setDarkMode(newSettings.darkMode);
-        console.log('تم تحديث وضع الألوان الداكنة إلى:', newSettings.darkMode);
       }
       
       // إرجاع القيم المحدثة للاستخدام اللاحق
@@ -175,9 +158,114 @@ export const ThemeProvider = ({ children }) => {
     getHighContrastValues
   };
 
+  // إنشاء ثيم MUI وتطبيق تدوير الزوايا والحواف
+  const theme = useMemo(() => {
+    const primaryMain = getPrimaryColorValue(settings.primaryColor);
+    const radiusVal = settings.roundedCorners === false ? '0px' : getBorderRadiusValue(settings.borderRadius);
+    const radiusNumber = parseInt(String(radiusVal).replace('px', ''), 10) || 8;
+    return createTheme({
+      palette: {
+        mode: darkMode ? 'dark' : 'light',
+        primary: { main: primaryMain },
+      },
+      shape: {
+        borderRadius: radiusNumber,
+      },
+      components: {
+        MuiPaper: {
+          defaultProps: { elevation: 1 },
+          styleOverrides: {
+            root: {
+              borderRadius: `${radiusNumber}px !important`,
+              overflow: 'hidden',
+            },
+          },
+        },
+        MuiCard: {
+          styleOverrides: {
+            root: {
+              borderRadius: `${radiusNumber}px !important`,
+              overflow: 'hidden',
+            },
+          },
+        },
+        MuiTableContainer: {
+          styleOverrides: {
+            root: {
+              borderRadius: `${radiusNumber}px !important`,
+              overflow: 'hidden',
+            },
+          },
+        },
+        MuiOutlinedInput: {
+          styleOverrides: {
+            root: {
+              borderRadius: `${radiusNumber}px !important`,
+            },
+            notchedOutline: {
+              borderRadius: `${radiusNumber}px !important`,
+            },
+          },
+        },
+        MuiButton: {
+          styleOverrides: {
+            root: {
+              borderRadius: `${radiusNumber}px !important`,
+              textTransform: 'none',
+            },
+          },
+        },
+        MuiChip: {
+          styleOverrides: {
+            root: {
+              borderRadius: `${radiusNumber}px !important`,
+            },
+          },
+        },
+        MuiDialog: {
+          styleOverrides: {
+            paper: {
+              borderRadius: `${radiusNumber}px !important`,
+            },
+          },
+        },
+        MuiMenu: {
+          styleOverrides: {
+            paper: {
+              borderRadius: `${radiusNumber}px !important`,
+            },
+          },
+        },
+        MuiPopover: {
+          styleOverrides: {
+            paper: {
+              borderRadius: `${radiusNumber}px !important`,
+            },
+          },
+        },
+        MuiDrawer: {
+          styleOverrides: {
+            paper: {
+              borderRadius: `${radiusNumber}px !important`,
+            },
+          },
+        },
+        MuiTooltip: {
+          styleOverrides: {
+            tooltip: {
+              borderRadius: `${Math.max(4, Math.round(radiusNumber * 0.75))}px !important`,
+            },
+          },
+        },
+      },
+    });
+  }, [darkMode, settings]);
+
   return (
     <ThemeContext.Provider value={value}>
-      {children}
+      <MuiThemeProvider theme={theme}>
+        {children}
+      </MuiThemeProvider>
     </ThemeContext.Provider>
   );
 };

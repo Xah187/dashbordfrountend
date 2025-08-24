@@ -46,13 +46,17 @@ import {
   CalendarToday as CalendarIcon,
   Engineering as EngineeringIcon,
   Description as DescriptionIcon,
-} from "@mui/icons-material";
+  ArrowBack as ArrowBackIcon,
+  } from "@mui/icons-material";
+import { ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from "@mui/icons-material";
 import { companiesSubscribedApi, Company, Branch, Project } from "../api";
+import { getSoftStatusChipSx } from "../../../utils/colorUtils";
 
 interface ProjectsViewProps {
   company: Company;
   branch: Branch;
   onProjectSelect: (project: Project) => void;
+  onBack: () => void;
   onLoading: (loading: boolean) => void;
   onError: (error: string | null) => void;
   showMessage: (message: string, severity?: 'success' | 'error' | 'warning' | 'info') => void;
@@ -62,6 +66,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   company,
   branch,
   onProjectSelect,
+  onBack,
   onLoading,
   onError,
   showMessage,
@@ -76,6 +81,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const [hasNextPage, setHasNextPage] = useState(false); // تتبع وجود صفحة تالية
   const [totalProjectsLoaded, setTotalProjectsLoaded] = useState(0); // عدد المشاريع المحملة
   const [localLoading, setLocalLoading] = useState(false);
+  // مرساة للتمرير السلس إلى أعلى القائمة بعد تغيير الصفحة
+  const listTopRef = React.useRef<HTMLDivElement | null>(null);
   
   // State النوافذ المنبثقة
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -253,16 +260,76 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     }
   };
 
-  // البحث في المشاريع - محلي مع إعادة تحميل عند المسح
-  const handleSearch = (term: string) => {
-    setSearchTerm(term);
-        
-    
-    // إذا تم مسح البحث، إعادة تحميل البيانات من البداية
-    if (!term.trim()) {
-      loadProjects(1, true);  // إعادة تعيين كامل للترقيم
+  // الحصول على 4 أرقام صفحات ثابتة للعرض
+  const getVisiblePages = (total: number, current: number): number[] => {
+    if (total <= 4) {
+      return Array.from({ length: total }, (_, i) => i + 1);
     }
-    // البحث الفعلي يتم عبر فلترة البيانات في العرض
+    if (current <= 2) return [1, 2, 3, 4];
+    if (current >= total - 1) return [total - 3, total - 2, total - 1, total];
+    return [current - 1, current, current + 1, current + 2];
+  };
+
+  // تمرير سلس إلى أعلى القائمة بعد اكتمال تحميل الصفحة الجديدة
+  useEffect(() => {
+    if (!localLoading && listTopRef.current) {
+      try {
+        listTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch {}
+    }
+  }, [currentPage, localLoading]);
+
+  // البحث في المشاريع داخل الفرع عبر الباك اند
+  const handleSearch = async (term: string) => {
+    setSearchTerm(term);
+    if (!term.trim()) {
+      // إعادة تعيين الترقيم وإعادة تحميل الصفحة الأولى
+      setCurrentPage(1);
+      setPageLastIds({ 1: 0 });
+      setTotalPages(1);
+      setHasNextPage(false);
+      loadProjects(1, true);
+      return;
+    }
+
+    try {
+      setLocalLoading(true);
+      onLoading(true);
+      // البحث على دفعات داخل الفرع ثم إعادة النتائج المتطابقة فقط
+      const response = await companiesSubscribedApi.searchBranchProjectsBatched(
+        branch.companyId,
+        branch.id,
+        term,
+        showDisabledProjects,
+        50 // حد أعلى لعدد النتائج لإبقاء الأداء جيداً
+      );
+      if (response.success) {
+        let results: Project[] = (response.data || []) as Project[];
+        if (!showDisabledProjects) {
+          results = results.filter((project: any) => {
+            const disabledVal: any = project.Disabled;
+            const isActive =
+              disabledVal === true ||
+              disabledVal === "true" ||
+              Number(disabledVal) === 1 ||
+              disabledVal === "1";
+            return isActive;
+          });
+        }
+        setProjects(results);
+        setCurrentPage(1);
+        setTotalPages(1);
+        setHasNextPage(false);
+        setPageLastIds({ 1: 0 });
+      } else {
+        onError(response.error || "حدث خطأ أثناء البحث في المشاريع");
+      }
+    } catch (error: any) {
+      onError(error.message || "حدث خطأ أثناء البحث في المشاريع");
+    } finally {
+      setLocalLoading(false);
+      onLoading(false);
+    }
   };
 
   // فتح نافذة إضافة/تعديل مشروع
@@ -527,20 +594,44 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   return (
     <Box>
-      {/* معلومات الفرع */}
+      {/* معلومات الفرع مع زر العودة */}
       <Paper sx={{ p: 3, mb: 3, background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', color: 'white' }}>
-        <Typography variant="h5" gutterBottom>
-          🏗️ مشاريع فرع: {branch.name}
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+          <Typography variant="h5" gutterBottom>
+            🏗️ مشاريع فرع: {branch.name}
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<ArrowBackIcon />}
+            onClick={onBack}
+            sx={{ 
+              backgroundColor: 'rgba(255, 255, 255, 0.15)',
+              color: 'white',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              borderRadius: '12px',
+              px: 3,
+              py: 1,
+              fontWeight: 600,
+              textTransform: 'none',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                border: '1px solid rgba(255, 255, 255, 0.4)',
+                transform: 'translateY(-2px)',
+                boxShadow: '0 6px 20px rgba(0,0,0,0.2)',
+              }
+            }}
+          >
+            العودة إلى فروع {company.name}
+          </Button>
+        </Box>
         <Box sx={{ display: 'flex', gap: 3, mt: 2, flexWrap: 'wrap' }}>
           <Typography variant="body2">
             🏢 الشركة: {company.name}
           </Typography>
           <Typography variant="body2">
             📍 العنوان: {branch.address || "غير محدد"}
-          </Typography>
-          <Typography variant="body2">
-            إجمالي المشاريع: {projects.length}
           </Typography>
           <Typography variant="body2">
             👨‍💼 المدير: {branch.manager || "غير محدد"}
@@ -589,106 +680,55 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
 
 
-      {/* إحصائيات المشاريع المحسنة */}
-      {projects.length > 0 && (
-        <Paper sx={{ p: 2, mb: 2, backgroundColor: 'primary.light', color: 'white' }}>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} sm={6}>
-              <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                إحصائيات المشاريع
-              </Typography>
-              <Typography variant="body1">
-                المشاريع في الصفحة: {filteredProjects.length} من {projects.length}
-              </Typography>
-              <Typography variant="body2">
-                {searchTerm ? `نتائج البحث عن: "${searchTerm}"` : 'جميع المشاريع'}
-              </Typography>
-              <Typography variant="body2">
-                👁️ حالة العرض: {showDisabledProjects ? 'جميع المشاريع (النشطة + المتوقفة)' : 'المشاريع النشطة فقط'}
-              </Typography>
-              <Typography variant="body2">
-                الصفحة التالية: {hasNextPage ? 'متوفرة' : 'غير متوفرة'}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} sm={6} sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
-              <Typography variant="body2">
-                🏢 الفرع: {branch.name}
-              </Typography>
-              <Typography variant="body2">
-                🏭 الشركة: {company.name}
-              </Typography>
-              <Typography variant="body2">
-                الصفحة الحالية: {projects.length} مشروع
-              </Typography>
-              <Typography variant="body2">
-                الصفحة {currentPage} من {totalPages} {hasNextPage && '(+)'}
-              </Typography>
-            </Grid>
-          </Grid>
-        </Paper>
-      )}
+      {/* تم إزالة قسم إحصائيات المشاريع */}
 
 
 
 
 
       {/* أرقام الصفحات الذكية - عرض البيانات الفعلية فقط */}
+      <div ref={listTopRef} />
       {(totalPages > 1 || hasNextPage) && !searchTerm.trim() && (
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-          <Pagination
-            count={totalPages} // عدد ذكي يعرض الصفحات التي تحتوي على بيانات فقط
-            page={Math.min(currentPage, totalPages)}
-            onChange={handlePageChange}
-            color="primary"
-            size="large"
-            showFirstButton={false}
-            showLastButton={false}
-            disabled={localLoading}
-            siblingCount={1} // عرض صفحة واحدة على كل جانب
-            boundaryCount={1} // عرض صفحة واحدة في البداية والنهاية
-            sx={{
-              '& .MuiPaginationItem-root': {
-                fontSize: '1rem',
-                minWidth: '40px',
-                height: '40px'
-              }
-            }}
-          />
-          <Typography variant="caption" color="text.secondary" sx={{ ml: 2, alignSelf: 'center' }}>
-            {totalPages} صفحة بها بيانات
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <IconButton
+              size="small"
+              onClick={() => handlePageChange({} as any, Math.max(1, currentPage - 1))}
+              disabled={localLoading || currentPage <= 1}
+            >
+              <ChevronRightIcon />
+            </IconButton>
+            {getVisiblePages(totalPages, Math.min(currentPage, totalPages)).map((p) => (
+              <Button
+                key={p}
+                variant={p === Math.min(currentPage, totalPages) ? 'contained' : 'outlined'}
+                color="primary"
+                size="small"
+                onClick={() => handlePageChange({} as any, p)}
+                disabled={localLoading}
+                sx={{
+                  minWidth: 40,
+                  height: 36,
+                  px: 1.25,
+                  borderRadius: (theme) => theme.shape.borderRadius,
+                  fontWeight: p === Math.min(currentPage, totalPages) ? 700 : 500
+                }}
+              >
+                {p}
+              </Button>
+            ))}
+            <IconButton
+              size="small"
+              onClick={() => handlePageChange({} as any, Math.min(totalPages, currentPage + 1))}
+              disabled={localLoading || currentPage >= totalPages}
+            >
+              <ChevronLeftIcon />
+            </IconButton>
+          </Box>
         </Box>
       )}
 
-      {/* أزرار للقفز للصفحات المتقدمة (ديناميكي) */}
-      {!searchTerm.trim() && currentPage <= 5 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 2, mb: 2, flexWrap: 'wrap' }}>
-          <Button 
-            variant="outlined" 
-            size="small"
-            onClick={() => handlePageChange({} as any, currentPage + 5)}
-            disabled={localLoading}
-          >
-            القفز +5 صفحات
-          </Button>
-          <Button 
-            variant="outlined" 
-            size="small"
-            onClick={() => handlePageChange({} as any, currentPage + 10)}
-            disabled={localLoading}
-          >
-            القفز +10 صفحات
-          </Button>
-          <Button 
-            variant="outlined" 
-            size="small"
-            onClick={() => handlePageChange({} as any, currentPage + 20)}
-            disabled={localLoading}
-          >
-            القفز +20 صفحة
-          </Button>
-        </Box>
-      )}
+      {/* تم إزالة أزرار القفز +5، +10، +20 صفحات */}
 
       {/* إحصائيات مفصلة لنظام last_id */}
 
@@ -696,23 +736,23 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
 
       {/* قائمة المشاريع */}
-      <TableContainer component={Paper} sx={{ mt: 2 }}>
-        <Table stickyHeader>
+      <TableContainer component={Paper} sx={{ mt: 2, width: '100%', overflowX: 'auto' }}>
+        <Table stickyHeader size="small" sx={{ minWidth: 700 }}>
           <TableHead>
             <TableRow>
               <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }}>
                 اسم المشروع
               </TableCell>
-              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }}>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white', display: { xs: 'none', sm: 'table-cell' } }}>
                 نوع العقد
               </TableCell>
-              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }}>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white', display: { xs: 'none', md: 'table-cell' } }}>
                 الموقع
               </TableCell>
-              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }}>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white', display: { xs: 'none', sm: 'table-cell' } }}>
                 تاريخ البداية
               </TableCell>
-              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }} align="center">
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white', display: { xs: 'none', md: 'table-cell' } }} align="center">
                 الرصيد
               </TableCell>
               <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }} align="center">
@@ -723,7 +763,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
               </TableCell>
             </TableRow>
           </TableHead>
-          <TableBody>
+          <TableBody
+            sx={{
+              '@keyframes fadeInSlide': {
+                from: { opacity: 0, transform: 'translateY(6px)' },
+                to: { opacity: 1, transform: 'translateY(0)' }
+              }
+            }}
+          >
             {localLoading && projects.length === 0 ? (
               // مؤشرات التحميل
               Array.from({ length: 5 }).map((_, index) => (
@@ -738,8 +785,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 </TableRow>
               ))
             ) : filteredProjects.length > 0 ? (
-              filteredProjects.map((project) => (
-                <TableRow key={project.id} hover>
+              filteredProjects.map((project, idx) => (
+                <TableRow
+                  key={project.id}
+                  hover
+                  sx={{
+                    animation: 'fadeInSlide 320ms ease both',
+                    animationDelay: `${Math.min(idx, 8) * 35}ms`
+                  }}
+                >
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                       <Avatar sx={{ bgcolor: 'primary.main' }}>
@@ -755,26 +809,71 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       </Box>
                     </Box>
                   </TableCell>
-                  <TableCell>{project.TypeOFContract}</TableCell>
-                  <TableCell>{project.LocationProject || 'غير محدد'}</TableCell>
-                  <TableCell>
+                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{project.TypeOFContract}</TableCell>
+                  <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                    {project.LocationProject ? (
+                      <Tooltip title="افتح في خرائط قوقل">
+                        <Button
+                          component="a"
+                          href={/^(https?:\/\/)/.test(String(project.LocationProject))
+                            ? String(project.LocationProject)
+                            : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(String(project.LocationProject || '').trim())}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          size="small"
+                          variant="contained"
+                          startIcon={<LocationIcon />}
+                          sx={{
+                            borderRadius: 999,
+                            minWidth: 0,
+                            height: 28,
+                            px: 1,
+                            fontSize: '0.75rem',
+                            textTransform: 'none',
+                            color: '#fff',
+                            background: 'linear-gradient(90deg, #90caf9 0%, #80cbc4 100%)',
+                            boxShadow: '0 3px 10px rgba(144,202,249,0.25)',
+                            '& .MuiButton-startIcon': {
+                              mr: 0.5,
+                              '& > *:nth-of-type(1)': { fontSize: 16 }
+                            },
+                            '&:hover': {
+                              background: 'linear-gradient(90deg, #64b5f6 0%, #4db6ac 100%)',
+                              boxShadow: '0 4px 12px rgba(100,181,246,0.3)'
+                            }
+                          }}
+                        >
+                          الموقع
+                        </Button>
+                      </Tooltip>
+                    ) : (
+                      'غير محدد'
+                    )}
+                  </TableCell>
+                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                     {project.ProjectStartdate 
                       ? new Date(project.ProjectStartdate).toLocaleDateString('en-GB')
                       : 'غير محدد'
                     }
                   </TableCell>
-                  <TableCell align="center">
+                  <TableCell align="center" sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                     {(project as any).cost 
                       ? `${((project as any).cost).toLocaleString('en-US', {maximumFractionDigits: 2, minimumFractionDigits: 2})} ريال`
                       : 'غير محدد'
                     }
                   </TableCell>
                   <TableCell align="center">
-                    <Chip
-                      label={getProjectStatusText(project.Disabled)}
-                      color={getProjectStatusColor(project.Disabled)}
-                      size="small"
-                    />
+                    {(() => {
+                      const disabledVal: any = (project as any).Disabled;
+                      const isActive = disabledVal === true || disabledVal === 'true' || Number(disabledVal) === 1;
+                      return (
+                        <Chip
+                          label={getProjectStatusText(project.Disabled)}
+                          size="small"
+                          sx={getSoftStatusChipSx(Boolean(isActive))}
+                        />
+                      );
+                    })()}
                   </TableCell>
                   <TableCell align="center">
                     <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
@@ -866,26 +965,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         </Alert>
       )}
 
-      {/* معلومات الصفحة المحسنة للنظام المفتوح */}
-      {projects.length > 0 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, flexWrap: 'wrap', gap: 2 }}>
-          <Typography variant="body2" color="text.secondary">
-            عرض {searchTerm ? filteredProjects.length : projects.length} مشروع 
-            {searchTerm && ` (من أصل ${projects.length})`}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            الصفحة {currentPage} من {totalPages}+ (نظام مفتوح)
-          </Typography>
-          {localLoading && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CircularProgress size={16} />
-              <Typography variant="body2" color="text.secondary">
-                جاري التحميل...
-          </Typography>
-            </Box>
-          )}
-        </Box>
-      )}
+
 
 
 

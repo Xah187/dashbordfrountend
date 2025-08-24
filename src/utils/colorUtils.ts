@@ -191,6 +191,41 @@ export const getStatusColor = (isActive: boolean): string => {
 };
 
 /**
+ * أنماط شارة حالة هادئة (Soft) للخلفية والنص وحدود خفيفة
+ */
+export const getSoftStatusChipSx = (isActive: boolean): { bgcolor: string; color: string; border: string; borderColor: string } => {
+  return isActive
+    ? { bgcolor: 'rgba(76, 175, 80, 0.12)', color: '#2e7d32', border: '1px solid', borderColor: 'rgba(76,175,80,0.3)' }
+    : { bgcolor: 'rgba(244, 67, 54, 0.12)', color: '#c62828', border: '1px solid', borderColor: 'rgba(244,67,54,0.3)' };
+};
+
+/**
+ * أنماط شارة حالة الاشتراك هادئة حسب الحالة النصية
+ */
+export const getSoftSubscriptionStatusChipSx = (status: string): { bgcolor: string; color: string; border: string; borderColor: string } => {
+  const map: Record<string, { bg: string; text: string; border: string }> = {
+    'active': { bg: 'rgba(76,175,80,0.12)', text: '#2e7d32', border: 'rgba(76,175,80,0.3)' },
+    'نشط': { bg: 'rgba(76,175,80,0.12)', text: '#2e7d32', border: 'rgba(76,175,80,0.3)' },
+    'expired': { bg: 'rgba(244,67,54,0.12)', text: '#c62828', border: 'rgba(244,67,54,0.3)' },
+    'منتهي': { bg: 'rgba(244,67,54,0.12)', text: '#c62828', border: 'rgba(244,67,54,0.3)' },
+    'expiring': { bg: 'rgba(255,152,0,0.12)', text: '#ef6c00', border: 'rgba(255,152,0,0.3)' },
+    'قيد التجديد': { bg: 'rgba(255,152,0,0.12)', text: '#ef6c00', border: 'rgba(255,152,0,0.3)' },
+    'معلق': { bg: 'rgba(255,193,7,0.12)', text: '#f9a825', border: 'rgba(255,193,7,0.3)' },
+    'ملغي': { bg: 'rgba(158,158,158,0.18)', text: '#455a64', border: 'rgba(158,158,158,0.35)' },
+  };
+  const key = status in map ? status : (status || '').toString().toLowerCase();
+  const v = map[key] || { bg: 'rgba(158,158,158,0.12)', text: '#546e7a', border: 'rgba(158,158,158,0.3)' };
+  return { bgcolor: v.bg, color: v.text, border: '1px solid', borderColor: v.border };
+};
+
+/** أنماط شارة حالة المراحل: مكتملة/متأخرة/قيد التنفيذ */
+export const getSoftStageStatusChipSx = (done: boolean, delayed: boolean): { bgcolor: string; color: string; border: string; borderColor: string } => {
+  if (done) return { bgcolor: 'rgba(76,175,80,0.12)', color: '#2e7d32', border: '1px solid', borderColor: 'rgba(76,175,80,0.3)' };
+  if (delayed) return { bgcolor: 'rgba(244,67,54,0.12)', color: '#c62828', border: '1px solid', borderColor: 'rgba(244,67,54,0.3)' };
+  return { bgcolor: 'rgba(255,193,7,0.12)', color: '#ef6c00', border: '1px solid', borderColor: 'rgba(255,193,7,0.3)' };
+};
+
+/**
  * إنشاء لون أفاتار متناسق للمستخدم بناء على صلاحياته
  * @param user - معلومات المستخدم
  * @returns لون الأفاتار

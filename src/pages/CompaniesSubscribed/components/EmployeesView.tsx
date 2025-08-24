@@ -48,11 +48,14 @@ import {
   Clear as ClearIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
+  ArrowBack as ArrowBackIcon,
 } from "@mui/icons-material";
 import { companiesSubscribedApi, Company, Employee } from "../api";
+import { getSoftStatusChipSx } from "../../../utils/colorUtils";
 
 interface EmployeesViewProps {
   company: Company;
+  onBack: () => void;
   onLoading: (loading: boolean) => void;
   onError: (error: string | null) => void;
   showMessage: (message: string, severity?: 'success' | 'error' | 'warning' | 'info') => void;
@@ -60,6 +63,7 @@ interface EmployeesViewProps {
 
 const EmployeesView: React.FC<EmployeesViewProps> = ({
   company,
+  onBack,
   onLoading,
   onError,
   showMessage,
@@ -700,11 +704,38 @@ const EmployeesView: React.FC<EmployeesViewProps> = ({
 
   return (
     <Box>
-      {/* معلومات الشركة */}
+      {/* معلومات الشركة مع زر العودة */}
       <Paper sx={{ p: 3, mb: 3, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
-        <Typography variant="h5" gutterBottom>
-          👥 موظفي شركة: {company.name}
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+          <Typography variant="h5" gutterBottom>
+            👥 موظفي شركة: {company.name}
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<ArrowBackIcon />}
+            onClick={onBack}
+            sx={{ 
+              backgroundColor: 'rgba(255, 255, 255, 0.15)',
+              color: 'white',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              borderRadius: '12px',
+              px: 3,
+              py: 1,
+              fontWeight: 600,
+              textTransform: 'none',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                border: '1px solid rgba(255, 255, 255, 0.4)',
+                transform: 'translateY(-2px)',
+                boxShadow: '0 6px 20px rgba(0,0,0,0.2)',
+              }
+            }}
+          >
+            العودة إلى الشركات المشتركة
+          </Button>
+        </Box>
         <Box sx={{ display: 'flex', gap: 3, mt: 2, flexWrap: 'wrap' }}>
           <Typography variant="body2">
             🏢 رقم الشركة: {company.id}
@@ -887,37 +918,7 @@ const EmployeesView: React.FC<EmployeesViewProps> = ({
       )}
 
       {/* أزرار القفز السريع لصفحات البحث */}
-      {isSearchMode && searchCurrentPage <= 5 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 2, mb: 2, flexWrap: 'wrap' }}>
-          <Button 
-            variant="outlined" 
-            color="secondary"
-            size="small"
-            onClick={() => handleSearchPageChange({} as any, searchCurrentPage + 5)}
-            disabled={searchLoading}
-          >
-            القفز +5 صفحات بحث
-          </Button>
-          <Button 
-            variant="outlined" 
-            color="secondary"
-            size="small"
-            onClick={() => handleSearchPageChange({} as any, searchCurrentPage + 10)}
-            disabled={searchLoading}
-          >
-            القفز +10 صفحات بحث
-          </Button>
-          <Button 
-            variant="outlined" 
-            color="secondary"
-            size="small"
-            onClick={() => handleSearchPageChange({} as any, searchCurrentPage + 20)}
-            disabled={searchLoading}
-          >
-            القفز +20 صفحة بحث
-          </Button>
-        </Box>
-      )}
+      {/* تم إزالة أزرار القفز +5، +10، +20 صفحات البحث */}
 
 
 
@@ -943,60 +944,30 @@ const EmployeesView: React.FC<EmployeesViewProps> = ({
               }
             }}
           />
-          <Typography variant="caption" color="text.secondary" sx={{ ml: 2, alignSelf: 'center' }}>
-            {totalPages} صفحة بها بيانات
-          </Typography>
+
         </Box>
       )}
 
-      {/* أزرار للقفز للصفحات المتقدمة (النظام العادي) */}
-      {!isSearchMode && currentPage <= 5 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 2, mb: 2, flexWrap: 'wrap' }}>
-          <Button 
-            variant="outlined" 
-            size="small"
-            onClick={() => handlePageChange({} as any, currentPage + 5)}
-            disabled={localLoading}
-          >
-            القفز +5 صفحات
-          </Button>
-          <Button 
-            variant="outlined" 
-            size="small"
-            onClick={() => handlePageChange({} as any, currentPage + 10)}
-            disabled={localLoading}
-          >
-            القفز +10 صفحات
-          </Button>
-          <Button 
-            variant="outlined" 
-            size="small"
-            onClick={() => handlePageChange({} as any, currentPage + 20)}
-            disabled={localLoading}
-          >
-            القفز +20 صفحة
-          </Button>
-        </Box>
-      )}
+      {/* تم إزالة أزرار القفز +5، +10، +20 صفحات */}
 
       {/* قائمة الموظفين */}
-      <TableContainer component={Paper} sx={{ mt: 2 }}>
-          <Table stickyHeader>
+      <TableContainer component={Paper} sx={{ mt: 2, width: '100%', overflowX: 'auto' }}>
+          <Table stickyHeader size="small" sx={{ minWidth: 700 }}>
             <TableHead>
               <TableRow>
               <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }}>
                 الموظف
               </TableCell>
-              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }}>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white', display: { xs: 'none', sm: 'table-cell' } }}>
                 الوظيفة
               </TableCell>
-              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }}>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white', display: { xs: 'none', sm: 'table-cell' } }}>
                 القسم
               </TableCell>
-              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }}>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white', display: { xs: 'none', md: 'table-cell' } }}>
                 رقم الهوية
               </TableCell>
-              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }}>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white', display: { xs: 'none', md: 'table-cell' } }}>
                 رقم الهاتف
               </TableCell>
               <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'primary.main', color: 'white' }} align="center">
@@ -1025,8 +996,8 @@ const EmployeesView: React.FC<EmployeesViewProps> = ({
                     <TableRow key={employee.id} hover>
                       <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Avatar sx={{ bgcolor: 'secondary.main' }}>
-                            <PersonIcon />
+                      <Avatar sx={{ bgcolor: 'secondary.main', width: { xs: 28, sm: 40 }, height: { xs: 28, sm: 40 } }}>
+                            <PersonIcon sx={{ fontSize: { xs: 16, sm: 24 } }} />
                           </Avatar>
                       <Box>
                         <Typography variant="body1" fontWeight="medium">
@@ -1038,17 +1009,17 @@ const EmployeesView: React.FC<EmployeesViewProps> = ({
                       </Box>
                         </Box>
                       </TableCell>
-                  <TableCell>{employee.job}</TableCell>
-                  <TableCell>{employee.jobHOM || 'غير محدد'}</TableCell>
-                  <TableCell>{employee.IDNumber}</TableCell>
-                  <TableCell>{employee.PhoneNumber}</TableCell>
+                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{employee.job}</TableCell>
+                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{employee.jobHOM || 'غير محدد'}</TableCell>
+                  <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{employee.IDNumber}</TableCell>
+                  <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{employee.PhoneNumber}</TableCell>
                   <TableCell align="center">
-                        <Chip
+                    <Chip
                       label={getEmployeeStatusText(employee.Activation)}
-                      color={getEmployeeStatusColor(employee.Activation)}
-                          size="small"
-                        />
-                      </TableCell>
+                      size="small"
+                      sx={getSoftStatusChipSx(employee.Activation === 'true')}
+                    />
+                  </TableCell>
                   <TableCell align="center">
                     <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
                           <Tooltip title="تعديل">

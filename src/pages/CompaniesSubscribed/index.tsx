@@ -43,12 +43,15 @@ const CompaniesSubscribedPage: React.FC = () => {
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: '',
-    severity: 'success' as 'success' | 'error' | 'warning' | 'info'
+    severity: 'success' as 'success' | 'error' | 'warning' | 'info',
+    durationMs: 6000,
   });
 
   // إظهار رسالة نجاح أو خطأ
   const showMessage = (message: string, severity: 'success' | 'error' | 'warning' | 'info' = 'success') => {
-    setSnackbar({ open: true, message, severity });
+    // تقليل زمن ظهور بعض الرسائل (مثلاً: تم تحديث الشركة بنجاح)
+    const fastDismiss = message.includes('تم تحديث الشركة بنجاح');
+    setSnackbar({ open: true, message, severity, durationMs: fastDismiss ? 1200 : 6000 });
   };
 
   // التنقل إلى عرض الشركات
@@ -178,6 +181,7 @@ const CompaniesSubscribedPage: React.FC = () => {
           <BranchesView
             company={navigation.company}
             onBranchSelect={navigateToProjects}
+            onBack={navigateToCompanies}
             onLoading={setLoading}
             onError={setError}
             showMessage={showMessage}
@@ -188,6 +192,7 @@ const CompaniesSubscribedPage: React.FC = () => {
         return (
           <EmployeesView
             company={navigation.company}
+            onBack={navigateToCompanies}
             onLoading={setLoading}
             onError={setError}
             showMessage={showMessage}
@@ -200,6 +205,7 @@ const CompaniesSubscribedPage: React.FC = () => {
             company={navigation.company}
             branch={navigation.branch}
             onProjectSelect={navigateToProjectDetails}
+            onBack={() => navigateToCompanyDetails(navigation.company, 'branches')}
             onLoading={setLoading}
             onError={setError}
             showMessage={showMessage}
@@ -223,9 +229,9 @@ const CompaniesSubscribedPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, p: { xs: 1.5, md: 0 } }}>
       {/* عنوان الصفحة والتنقل */}
-      <Paper sx={{ p: 3 }}>
+      <Paper sx={{ p: { xs: 2, md: 3 } }}>
         <Typography variant="h4" component="h1" gutterBottom>
           📊 صفحة الشركات المشتركة
         </Typography>
@@ -253,14 +259,14 @@ const CompaniesSubscribedPage: React.FC = () => {
       </Paper>
 
       {/* محتوى الصفحة الحالي */}
-      <Box sx={{ flex: 1 }}>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
         {renderCurrentView()}
       </Box>
 
       {/* رسائل التنبيه */}
       <Snackbar
         open={snackbar.open}
-        autoHideDuration={6000}
+        autoHideDuration={snackbar.durationMs}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
       >
         <Alert

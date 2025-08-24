@@ -49,6 +49,8 @@ import {
   Group as GroupIcon,
 } from "@mui/icons-material";
 import { companiesSubscribedApi, Company } from "../api";
+import apiClient from "../../../api/config";
+import { getSoftStatusChipSx } from "../../../utils/colorUtils";
 
 interface CompaniesViewProps {
   onCompanySelect: (company: Company) => void;
@@ -98,6 +100,7 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
   // State النوافذ المنبثقة
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+  const [isDialogLoading, setIsDialogLoading] = useState(false);
 
   // إدارة إغلاق النافذة وإعادة تعيين التركيز
   const handleCloseDialog = () => {
@@ -506,6 +509,57 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
     setDialogOpen(true);
   };
 
+  // عند فتح نافذة تعديل شركة: اجلب كل الحقول الناقصة من المسار الكامل
+  useEffect(() => {
+    const fetchFullCompanyDetails = async () => {
+      if (!dialogOpen || !editingCompany) return;
+      try {
+        setIsDialogLoading(true);
+        const resp = await apiClient.get('/company', { params: { idCompany: editingCompany.id } });
+        const raw = resp?.data?.data || {};
+        const details: any = Array.isArray(raw) ? (raw[0] || {}) : raw;
+
+        // تطبيع الحقول من الباك الكامل
+        const buildingNumber = String(details.BuildingNumber || details.buildingNumber || "");
+        const streetName = String(details.StreetName || details.streetName || "");
+        const neighborhoodName = String(details.NeighborhoodName || details.neighborhoodName || "");
+        const postalCode = String(details.PostalCode || details.postalCode || "");
+        const city = String(details.City || details.city || "");
+        const country = String(details.Country || details.country || "");
+        const registrationNumber = String(details.CommercialRegistrationNumber || details.registrationNumber || "");
+        const taxNumber = String(details.TaxNumber || details.taxNumber || "");
+        const branchesAllowed = String(details.NumberOFbranchesAllowed || details.branchesAllowed || "");
+        const subscriptionStartDate = String(details.SubscriptionStartDate || details.subscriptionStartDate || "");
+        const subscriptionEndDate = String(details.SubscriptionEndDate || details.subscriptionEndDate || "");
+        const cost = String(details.Cost || details.cost || "");
+
+        // دمج القيم في النموذج دون فقد ما تم تعبئته مسبقاً
+        setFormData(prev => ({
+          ...prev,
+          name: prev.name || editingCompany.name || "",
+          city: prev.city || city,
+          country: prev.country || country,
+          commercialRegistrationNumber: prev.commercialRegistrationNumber || registrationNumber,
+          buildingNumber: prev.buildingNumber || buildingNumber,
+          streetName: prev.streetName || streetName,
+          neighborhoodName: prev.neighborhoodName || neighborhoodName,
+          postalCode: prev.postalCode || postalCode,
+          taxNumber: prev.taxNumber || taxNumber,
+          branchesAllowed: prev.branchesAllowed || branchesAllowed,
+          subscriptionStartDate: prev.subscriptionStartDate || subscriptionStartDate,
+          subscriptionEndDate: prev.subscriptionEndDate || subscriptionEndDate,
+          cost: prev.cost || cost,
+        }));
+      } catch (e: any) {
+        console.error('فشل جلب تفاصيل الشركة:', e);
+        onError(e?.response?.data?.error || e?.message || 'تعذر جلب تفاصيل الشركة');
+      } finally {
+        setIsDialogLoading(false);
+      }
+    };
+    fetchFullCompanyDetails();
+  }, [dialogOpen, editingCompany]);
+
   // حفظ الشركة
   const handleSaveCompany = async () => {
     try {
@@ -899,21 +953,19 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
               }
             }}
           />
-          <Typography variant="caption" color="text.secondary" sx={{ ml: 2, alignSelf: 'center' }}>
-            {totalPages} صفحة إجمالي • {totalCompanies} شركة
-          </Typography>
+
         </Box>
       )}
 
       {/* قائمة الشركات */}
-      <TableContainer component={Paper}>
-        <Table>
+      <TableContainer component={Paper} sx={{ width: '100%', overflowX: 'auto' }}>
+        <Table size="small" sx={{ minWidth: 700 }}>
           <TableHead>
             <TableRow>
               <TableCell>الشركة</TableCell>
-              <TableCell>العنوان والموقع</TableCell>
-              <TableCell>تفاصيل الاشتراك (ميلادي)</TableCell>
-              <TableCell>الفروع</TableCell>
+              <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>العنوان والموقع</TableCell>
+              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>تفاصيل الاشتراك (ميلادي)</TableCell>
+              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>الفروع</TableCell>
               <TableCell>الحالة</TableCell>
               <TableCell>الإجراءات</TableCell>
             </TableRow>
@@ -925,22 +977,22 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
                   <TableCell>
                     <Skeleton variant="text" width="60%" />
                     <Skeleton variant="text" width="80%" />
-              </TableCell>
-                  <TableCell>
+                  </TableCell>
+                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                     <Skeleton variant="text" width="70%" />
-              </TableCell>
-                  <TableCell>
+                  </TableCell>
+                  <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                     <Skeleton variant="text" width="50%" />
-              </TableCell>
-                  <TableCell>
+                  </TableCell>
+                  <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                     <Skeleton variant="text" width="40%" />
-              </TableCell>
+                  </TableCell>
                   <TableCell>
                     <Skeleton variant="rectangular" width={60} height={24} />
-              </TableCell>
+                  </TableCell>
                   <TableCell>
                     <Skeleton variant="text" width="80%" />
-              </TableCell>
+                  </TableCell>
                 </TableRow>
               ))
             ) : displayedCompanies.length > 0 ? (
@@ -948,29 +1000,29 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
                 <TableRow key={company.id} hover>
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <BusinessIcon color="primary" />
+                      <BusinessIcon color="primary" sx={{ fontSize: { xs: 20, sm: 24 } }} />
                       <Box>
                         <Typography variant="subtitle2" fontWeight="bold">
                           {company.name}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          رقم التسجيل: {(company as any).commercialRegistrationNumber || company.registrationNumber || "غير محدد"}
+                          رقم التسجيل: {(company as any).commercialRegistrationNumber || company.registrationNumber || 'غير محدد'}
                         </Typography>
                       </Box>
                     </Box>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                     <Box>
                       <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <LocationIcon fontSize="small" color="action" />
-                        {company.address || "غير محدد"}
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{company.address || 'غير محدد'}</span>
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {company.city}{company.country && `, ${company.country}`}
                       </Typography>
                     </Box>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                     <Typography variant="body2">
                       من: {new Date(company.subscriptionStart).toLocaleDateString('en-GB')}
                     </Typography>
@@ -978,50 +1030,43 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
                       إلى: {new Date(company.subscriptionEnd).toLocaleDateString('en-GB')}
                     </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <BranchIcon fontSize="small" color="action" />
                       <Typography variant="body2">
-                        {company.branchesCount || 0} / {company.branchesAllowed || "∞"}
+                        {company.branchesCount || 0} / {company.branchesAllowed || '∞'}
                       </Typography>
                     </Box>
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={company.isActive ? "نشط" : "غير نشط"}
-                      color={company.isActive ? "success" : "error"}
+                      label={company.isActive ? 'نشط' : 'غير نشط'}
                       size="small"
+                      sx={getSoftStatusChipSx(!!company.isActive)}
                     />
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                       <Tooltip title="عرض التفاصيل">
-                         <Button
-                           size="small"
-                           variant="outlined"
+                        <Button
+                          size="small"
+                          variant="outlined"
                           startIcon={<GroupIcon />}
                           onClick={() => onCompanySelect(company)}
                         >
                           التفاصيل
-                         </Button>
-                       </Tooltip>
+                        </Button>
+                      </Tooltip>
                       <Tooltip title="تعديل">
-                        <IconButton
-                          size="small"
-                          onClick={() => openCompanyDialog(company)}
-                        >
+                        <IconButton size="small" onClick={() => openCompanyDialog(company)}>
                           <EditIcon />
                         </IconButton>
                       </Tooltip>
-                                             <Tooltip title="حذف">
-                         <IconButton
-                           size="small"
-                           color="error"
-                           onClick={() => handleDeleteCompany(company)}
-                         >
-                           <DeleteIcon />
-                         </IconButton>
-                       </Tooltip>
+                      <Tooltip title="حذف">
+                        <IconButton size="small" color="error" onClick={() => handleDeleteCompany(company)}>
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
                     </Box>
                   </TableCell>
                 </TableRow>
@@ -1030,15 +1075,12 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
               <TableRow>
                 <TableCell colSpan={6}>
                   <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <BusinessIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+                    <BusinessIcon sx={{ fontSize: { xs: 40, sm: 64 }, color: 'text.secondary', mb: 2 }} />
                     <Typography variant="h6" color="text.secondary">
-                      {searchTerm ? 
-                        `لم يتم العثور على نتائج للبحث "${searchTerm}"` : 
-                        "لا توجد شركات في هذه الصفحة"
-                      }
+                      {searchTerm ? `لم يتم العثور على نتائج للبحث "${searchTerm}"` : 'لا توجد شركات في هذه الصفحة'}
                     </Typography>
                     {searchTerm ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                         جرب البحث بمصطلحات أخرى أو امسح البحث لعرض جميع الشركات
                       </Typography>
                     ) : (
@@ -1046,12 +1088,7 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 2 }}>
                           جرب الانتقال لصفحات أخرى أو إضافة شركات جديدة.
                         </Typography>
-                        <Button
-                          variant="outlined"
-                          startIcon={<AddIcon />}
-                          onClick={() => openCompanyDialog()}
-                          sx={{ mt: 1 }}
-                        >
+                        <Button variant="outlined" startIcon={<AddIcon />} onClick={() => openCompanyDialog()} sx={{ mt: 1 }}>
                           إضافة شركة جديدة
                         </Button>
                       </>
@@ -1077,12 +1114,7 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
               ` من أصل ${totalCompanies} شركة - الصفحة ${currentPage} من ${totalPages}`
             }
         </Typography>
-            <Typography variant="body2" color="text.secondary">
-            {isSearchMode ? 
-              "نظام البحث الشامل (يجلب جميع الشركات)" :
-              "النظام الأصلي الموثوق (10 شركات/صفحة)"
-            }
-            </Typography>
+
           {(localLoading || searchLoading) && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CircularProgress size={16} />
@@ -1116,9 +1148,12 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
           {editingCompany ? "تعديل الشركة" : "إضافة شركة جديدة"}
         </DialogTitle>
         <DialogContent>
-          <Typography id="company-dialog-description" variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {editingCompany ? "قم بتعديل بيانات الشركة أدناه" : "قم بإدخال بيانات الشركة الجديدة"}
-          </Typography>
+          {isDialogLoading && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+              <CircularProgress size={20} />
+              <Typography variant="body2" color="text.secondary">جاري جلب تفاصيل الشركة...</Typography>
+            </Box>
+          )}
           <Grid container spacing={2} sx={{ mt: 1 }}>
             {/* معلومات أساسية */}
             <Grid item xs={12}>
@@ -1264,7 +1299,6 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
                 value={formData.subscriptionStartDate}
                 onChange={(e) => setFormData({ ...formData, subscriptionStartDate: e.target.value })}
                 InputLabelProps={{ shrink: true }}
-                helperText="التاريخ بالتقويم الميلادي"
               />
             </Grid>
             
@@ -1276,16 +1310,10 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
                 value={formData.subscriptionEndDate}
                 onChange={(e) => setFormData({ ...formData, subscriptionEndDate: e.target.value })}
                 InputLabelProps={{ shrink: true }}
-                helperText="التاريخ بالتقويم الميلادي"
               />
             </Grid>
             
-            <Grid item xs={12}>
-              <Typography variant="caption" color="text.secondary">
-                * الحقول المطلوبة بناءً على بنية قاعدة البيانات<br/>
-                جميع التواريخ معروضة بالتقويم الميلادي (Gregorian Calendar)
-              </Typography>
-            </Grid>
+            
           </Grid>
         </DialogContent>
         <DialogActions>

@@ -31,7 +31,7 @@ import {
   Tooltip,
   Chip
 } from '@mui/material';
-import NotificationsIcon from '@mui/icons-material/Notifications';
+
 import PaletteIcon from '@mui/icons-material/Palette';
 import PersonIcon from '@mui/icons-material/Person';
 import BackupIcon from '@mui/icons-material/Backup';
@@ -52,10 +52,8 @@ const Settings = () => {
   const { darkMode, themeSettings, updateThemeSettings, getPrimaryColorValue, getFontSizeMultiplier, getBorderRadiusValue } = useTheme();
   const { 
     userProfile, 
-    notifications, 
     backups,
     updateUserProfile,
-    updateNotificationSettings,
     createBackup,
     restoreBackup,
     deleteBackup,
@@ -81,12 +79,6 @@ const Settings = () => {
   }, [darkMode, themeSettings]);
   
   const [settings, setSettings] = useState({
-    notifications: {
-      email: notifications.email,
-      push: notifications.push,
-      sms: notifications.sms,
-      desktop: notifications.desktop,
-    },
     appearance: {
       darkMode: darkMode,
       highContrast: themeSettings?.highContrast || false,
@@ -199,7 +191,7 @@ const Settings = () => {
     setTabValue(newValue);
   };
 
-  // تطبيق تغييرات الإشعارات والمظهر تلقائياً
+  // تطبيق تغييرات المظهر تلقائياً
   const handleSwitchChange = (section, key) => (event) => {
     const newSettings = {
       ...settings,
@@ -211,11 +203,8 @@ const Settings = () => {
     
     setSettings(newSettings);
     
-    // تطبيق التغييرات فوراً بدون إشعار مزعج
-    if (section === 'notifications') {
-      updateNotificationSettings(newSettings.notifications);
-    } else if (section === 'appearance') {
-      // تطبيق إعدادات المظهر
+    // تطبيق إعدادات المظهر
+    if (section === 'appearance') {
       updateThemeSettings(newSettings.appearance);
     }
   };
@@ -276,21 +265,7 @@ const Settings = () => {
 
 
 
-  const handleSaveNotifications = () => {
-    setIsLoading(true);
-    
-    // تحديث إعدادات الإشعارات باستخدام UserContext
-    const updatedNotifications = updateNotificationSettings(settings.notifications);
-    
-    setTimeout(() => {
-      setIsLoading(false);
-      setSnackbar({
-        open: true,
-        message: 'تم حفظ إعدادات الإشعارات بنجاح',
-        severity: 'success',
-      });
-    }, 800);
-  };
+
 
   // تطبيق إعدادات المظهر تلقائياً
   const handleAppearanceChange = (key, value) => {
@@ -381,12 +356,6 @@ const Settings = () => {
           // إعادة تحميل البيانات - تحديث الإعدادات والملف الشخصي
           setTimeout(() => {
             setSettings({
-              notifications: {
-                email: notifications.email,
-                push: notifications.push,
-                sms: notifications.sms,
-                desktop: notifications.desktop,
-              },
               appearance: {
                 darkMode: darkMode,
                 highContrast: themeSettings?.highContrast || false,
@@ -474,7 +443,7 @@ const Settings = () => {
           avatar: newAvatar
         });
         
-        // تطبيق التغيير فوراً في UserContext لتحديث جميع أجزاء التطبيق
+        // تطبيق التغيير فوراً في UserContext لتحديث جميع أجزاء لوحة التحكم
         updateUserProfile({ avatar: newAvatar });
         
         // إظهار رسالة نجاح
@@ -620,6 +589,7 @@ const Settings = () => {
           onChange={handleTabChange}
           variant="scrollable"
           scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{ 
             borderBottom: 1, 
             borderColor: 'divider',
@@ -646,7 +616,6 @@ const Settings = () => {
           }}
         >
           <Tab icon={<PersonIcon />} label="معلومات المستخدم" iconPosition="start" />
-          <Tab icon={<NotificationsIcon />} label="إشعارات النظام" iconPosition="start" />
           <Tab icon={<PaletteIcon />} label="المظهر" iconPosition="start" />
         </Tabs>
       </Paper>
@@ -656,7 +625,7 @@ const Settings = () => {
         <Grid container spacing={4}>
           <Grid item xs={12} md={4}>
             <Card sx={{ borderRadius: 2, boxShadow: 2, height: '100%', width: '100%' }}>
-              <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 4, direction: 'rtl' }}>
+              <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: { xs: 2, md: 4 }, direction: 'rtl' }}>
                 <Box sx={{ position: 'relative' }}>
                   <ProfileAvatar 
                     size="xlarge"
@@ -762,7 +731,7 @@ const Settings = () => {
           </Grid>
           <Grid item xs={12} md={8}>
             <Card sx={{ borderRadius: 2, boxShadow: 2, width: '100%' }}>
-              <CardContent sx={{ p: 4, direction: 'rtl' }}>
+              <CardContent sx={{ p: { xs: 2, md: 4 }, direction: 'rtl' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                     
@@ -883,146 +852,13 @@ const Settings = () => {
         </Grid>
       )}
 
-      {tabValue === 1 && (
-        <Card sx={{ borderRadius: 2, boxShadow: 2, width: '100%' }}>
-          <CardContent sx={{ p: 4, direction: 'rtl' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', width: '100%', mb: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ textAlign: 'right', fontWeight: 600, color: 'primary.main' }}>
-                إشعارات نظام لوحة التحكم
-            </Typography>
-            </Box>
-            <List sx={{ mb: 2 }}>
-              <ListItem 
-                sx={{ 
-                  py: 1.5,
-                  pr: 2,
-                  pl: 2,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  direction: 'rtl'
-                }}
-              >
-                  <Switch
-                    checked={settings.notifications.email}
-                    onChange={handleSwitchChange('notifications', 'email')}
-                    color="primary"
-                  />
-                <Box sx={{ flex: 1, textAlign: 'left', ml: 2 }}>
-                  <Typography variant="body1" sx={{ fontWeight: 500, mb: 0.5 }}>
-                    إشعارات النظام العامة
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    تلقي إشعارات عند تحديث النظام أو إضافة بيانات جديدة
-                  </Typography>
-                </Box>
-              </ListItem>
-              <Divider />
-              <ListItem 
-                sx={{ 
-                  py: 1.5,
-                  pr: 2,
-                  pl: 2,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  direction: 'rtl'
-                }}
-              >
-                  <Switch
-                    checked={settings.notifications.push}
-                    onChange={handleSwitchChange('notifications', 'push')}
-                    color="primary"
-                  />
-                <Box sx={{ flex: 1, textAlign: 'left', ml: 2 }}>
-                  <Typography variant="body1" sx={{ fontWeight: 500, mb: 0.5 }}>
-                    إشعارات المهام
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    تلقي إشعارات عند إضافة مهام جديدة أو اقتراب المواعيد النهائية
-                  </Typography>
-                </Box>
-              </ListItem>
-              <Divider />
-              <ListItem 
-                sx={{ 
-                  py: 1.5,
-                  pr: 2,
-                  pl: 2,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  direction: 'rtl'
-                }}
-              >
-                  <Switch
-                    checked={settings.notifications.sms}
-                    onChange={handleSwitchChange('notifications', 'sms')}
-                    color="primary"
-                  />
-                <Box sx={{ flex: 1, textAlign: 'left', ml: 2 }}>
-                  <Typography variant="body1" sx={{ fontWeight: 500, mb: 0.5 }}>
-                    إشعارات البيانات
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    تلقي إشعارات عند إضافة أو تحديث البيانات في النظام
-                  </Typography>
-                </Box>
-              </ListItem>
-              <Divider />
-              <ListItem 
-                sx={{ 
-                  py: 1.5,
-                  pr: 2,
-                  pl: 2,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  direction: 'rtl'
-                }}
-              >
-                  <Switch
-                    checked={settings.notifications.desktop}
-                    onChange={handleSwitchChange('notifications', 'desktop')}
-                    color="primary"
-                  />
-                <Box sx={{ flex: 1, textAlign: 'left', ml: 2 }}>
-                  <Typography variant="body1" sx={{ fontWeight: 500, mb: 0.5 }}>
-                    إشعارات التنبيهات
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    تلقي إشعارات عند ظهور تنبيهات أو رسائل مهمة في النظام
-                  </Typography>
-                </Box>
-              </ListItem>
-            </List>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-              <Button 
-                variant="contained" 
-                color="primary"
-                sx={{ 
-                  px: 3, 
-                  py: 1, 
-                  borderRadius: 1.5, 
-                  fontWeight: 600,
-                  boxShadow: 2
-                }}
-                onClick={handleSaveNotifications}
-                disabled={isLoading}
-                startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : null}
-              >
-                {isLoading ? 'جاري الحفظ...' : 'حفظ التغييرات'}
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
-      )}
 
-      {tabValue === 2 && (
+
+      {tabValue === 1 && (
         <Grid container spacing={3}>
           <Grid item xs={12} md={8}>
             <Card sx={{ borderRadius: 2, boxShadow: 2, width: '100%' }}>
-              <CardContent sx={{ p: 4, direction: 'rtl' }}>
+              <CardContent sx={{ p: { xs: 2, md: 4 }, direction: 'rtl' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', width: '100%', mb: 3 }}>
                   <Typography variant="h6" gutterBottom sx={{ textAlign: 'right', fontWeight: 600, color: 'primary.main' }}>
                   إعدادات المظهر
@@ -1041,7 +877,7 @@ const Settings = () => {
                   justifyContent: 'flex-end'
                 }}>
                   <Typography variant="body1">
-                    يمكنك تخصيص مظهر التطبيق من خلال هذه الإعدادات
+                    يمكنك تخصيص مظهر لوحة التحكم من خلال هذه الإعدادات
                   </Typography>
                 </Box>
                 
@@ -1076,7 +912,7 @@ const Settings = () => {
                   />
                 <ListItemText
                   primary="الوضع المظلم"
-                  secondary="تفعيل الوضع المظلم في التطبيق"
+                  secondary="تفعيل الوضع المظلم في لوحة التحكم"
                           primaryTypographyProps={{ 
                             align: 'left', 
                             fontWeight: 500,
@@ -1182,7 +1018,7 @@ const Settings = () => {
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'flex-end', width: '100%', mb: 2 }}>
                     <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'right' }}>
-                    تغيير حجم الخط في جميع أنحاء التطبيق
+                    تغيير حجم الخط في جميع أنحاء لوحة التحكم
                   </Typography>
                   </Box>
                   
@@ -1313,13 +1149,7 @@ const Settings = () => {
                   </Grid>
                 </Box>
                 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 3, flexWrap: 'wrap', gap: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2" color="info.main" sx={{ fontWeight: 600 }}>
-                      التغييرات تطبق فوراً
-                    </Typography>
-                    <CheckCircleIcon color="info" />
-                  </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mt: 3 }}>
                   <Button 
                     variant="outlined" 
                     color="secondary"
@@ -1357,12 +1187,6 @@ const Settings = () => {
                   >
                     إعادة تعيين
                   </Button>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
-                      التطبيق التلقائي مُفعّل
-                    </Typography>
-                    <CheckCircleIcon color="success" />
-                  </Box>
                 </Box>
           </CardContent>
         </Card>
@@ -1370,7 +1194,7 @@ const Settings = () => {
           
           <Grid item xs={12} md={4}>
             <Card sx={{ borderRadius: 2, boxShadow: 2, height: '100%', width: '100%' }}>
-              <CardContent sx={{ p: 4, direction: 'rtl' }}>
+              <CardContent sx={{ p: { xs: 2, md: 4 }, direction: 'rtl' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', width: '100%', mb: 3 }}>
                   <Typography variant="h6" gutterBottom sx={{ textAlign: 'right', fontWeight: 600, color: 'primary.main' }}>
                   معاينة الإعدادات
