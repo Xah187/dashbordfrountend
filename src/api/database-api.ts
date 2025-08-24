@@ -1,15 +1,3 @@
-/**
- * Database API - NEW API ONLY
- * 
- * ⚠️  هذا الملف يستخدم الـ APIs الجديدة فقط:
- * - GET /api/companies/subs/:subId/projects
- * - GET /api/companies/subs/:subId/projects/search
- * 
- * 🚫 تم حذف كل الـ fallback للـ APIs القديمة
- * 
- * 📊 إذا كان الـ backend لا يدعم هذه الـ APIs بعد، ستظهر مصفوفة فارغة []
- * حتى يتم تحديث الـ backend لدعم الـ APIs الجديدة
- */
 
 import { apiClient } from "./config";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
