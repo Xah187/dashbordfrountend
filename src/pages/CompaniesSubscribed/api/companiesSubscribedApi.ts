@@ -13,6 +13,7 @@ export interface Company {
   subscriptionStart: string;
   subscriptionEnd: string;
   apiKey: string;
+  projectsCount?: number; // عدد المشاريع الإجمالي للشركة
 }
 
 export interface Branch {
@@ -2358,12 +2359,12 @@ export const companiesSubscribedApi = {
 
         if (batchProjects.length === 0) {
           consecutiveEmptyBatches++;
-          
+
           // إذا حصلنا على 5 دفعات فارغة متتالية، نعتبر أننا وصلنا للنهاية
           if (consecutiveEmptyBatches >= 5) {
             break;
           }
-          
+
           // جرب زيادة last_id بقفزة أكبر في حالة وجود فجوات في البيانات
           currentLastId += 5;
           continue;
@@ -2372,42 +2373,70 @@ export const companiesSubscribedApi = {
         // إعادة تعيين عداد الدفعات الفارغة
         consecutiveEmptyBatches = 0;
 
-        // إضافة المشاريع الجديدة (تجنب التكرار)
-        const newProjects = batchProjects.filter((newProject: any) => 
-          !allProjects.some(existingProject => existingProject.id === newProject.id)
-        );
+        // إضافة المشاريع للقائمة
+        allProjects.push(...batchProjects);
 
-        allProjects.push(...newProjects);
-
-        // تحديث currentLastId لآخر مشروع في الدفعة
+        // تحديث last_id للدفعة التالية
         if (batchProjects.length > 0) {
-          const lastProjectInBatch = batchProjects[batchProjects.length - 1];
-          const newLastId = lastProjectInBatch.id;
-          
-          // تأكد من أن last_id يتقدم
-          if (newLastId <= currentLastId) {
-            currentLastId = currentLastId + 5;
-          } else {
-            currentLastId = newLastId;
-          }
+          const lastProject = batchProjects[batchProjects.length - 1];
+          currentLastId = lastProject.id || (currentLastId + batchProjects.length);
         }
 
-        // حماية من الحلقة اللانهائية - حد مرن يمكن رفعه حسب الحاجة
-        if (allProjects.length >= 10000) {
+        // إذا كانت الدفعة أقل من الحد المتوقع، فقد وصلنا للنهاية
+        if (batchProjects.length < batchSize) {
           break;
         }
       }
 
-      const actualCount = allProjects.length;
-      
       return {
         success: true,
-        data: { count: actualCount }
+        data: { count: allProjects.length }
       };
     } catch (error: any) {
+      console.error("خطأ في جلب عدد مشاريع الفرع:", error);
       return {
         success: false,
-        error: error.response?.data?.error || error.message || "حدث خطأ أثناء جلب العدد الفعلي للمشاريع للفرع",
+        error: error.response?.data?.error || error.message || "حدث خطأ أثناء جلب عدد المشاريع",
+      };
+    }
+  },
+
+  // جلب العدد الإجمالي للمشاريع لكل شركة (جديد)
+  async getCompanyTotalProjectsCount(companyId: number): Promise<ApiResponse<{ count: number }>> {
+    try {
+      console.log('🔍 جلب العدد الإجمالي للمشاريع للشركة:', companyId);
+
+      // أولاً، جلب جميع فروع الشركة
+      const branchesResponse = await this.getCompanyBranches(companyId, 0, 100);
+      if (!branchesResponse.success || !branchesResponse.data) {
+        return {
+          success: false,
+          error: "فشل في جلب فروع الشركة"
+        };
+      }
+
+      const branches = branchesResponse.data;
+      let totalProjectsCount = 0;
+
+      // جلب عدد المشاريع لكل فرع
+      for (const branch of branches) {
+        const branchProjectsResponse = await this.getBranchProjectsActualCount(companyId, branch.id);
+        if (branchProjectsResponse.success && branchProjectsResponse.data) {
+          totalProjectsCount += branchProjectsResponse.data.count;
+        }
+      }
+
+      console.log('📊 العدد الإجمالي للمشاريع للشركة', companyId, ':', totalProjectsCount);
+
+      return {
+        success: true,
+        data: { count: totalProjectsCount }
+      };
+    } catch (error: any) {
+      console.error("خطأ في جلب العدد الإجمالي للمشاريع للشركة:", error);
+      return {
+        success: false,
+        error: error.response?.data?.error || error.message || "حدث خطأ أثناء جلب العدد الإجمالي للمشاريع",
       };
     }
   },

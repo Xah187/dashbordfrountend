@@ -47,6 +47,7 @@ import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   Group as GroupIcon,
+  Work as ProjectIcon,
 } from "@mui/icons-material";
 import { companiesSubscribedApi, Company } from "../api";
 import apiClient from "../../../api/config";
@@ -72,6 +73,7 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
   const [totalPages, setTotalPages] = useState(1);
   const [totalCompanies, setTotalCompanies] = useState(0);
   const [localLoading, setLocalLoading] = useState(false);
+  const [projectsCounts, setProjectsCounts] = useState<{[key: number]: number}>({});
   
   // State إضافي للتوافق مع البحث المتقدم
   const [pageLastIds, setPageLastIds] = useState<{[key: number]: number}>({1: 0});
@@ -278,12 +280,17 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
         setSearchResults(results);
         setSearchCurrentPage(1);
         setSearchTotalPages(Math.max(1, Math.ceil(results.length / 10)));
-        
+
         setSearchSummary({
           totalFound: results.length,
           searchedIn: 0,
           hasMore: false
         });
+
+        // جلب عدد المشاريع لنتائج البحث
+        if (results.length > 0) {
+          loadProjectsCounts(results);
+        }
 
         console.log('نتائج البحث الشامل للشركات:', {
           searchTerm: term,
@@ -407,7 +414,7 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
         
         setCompanies(newCompanies);
         setCurrentPage(page);
-        
+
         // حساب الصفحات بناء على العدد الإجمالي (النظام الأصلي)
         const calculatedTotalPages = Math.ceil(totalCount / 10);
         setTotalPages(calculatedTotalPages);
@@ -422,6 +429,11 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
             [page]: page === 1 ? 0 : prev[page] || 0,
             [page + 1]: lastCompanyId
           }));
+        }
+
+        // جلب عدد المشاريع لكل شركة
+        if (newCompanies.length > 0) {
+          loadProjectsCounts(newCompanies);
         }
         
         // console.log('📈 تحديث حالة الشركات (نظام مختلط):', {
@@ -762,6 +774,33 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
   // البيانات المعروضة حالياً (للعرض العادي أو نتائج البحث)
   const displayedCompanies = isSearchMode ? searchResults.slice((searchCurrentPage - 1) * 10, searchCurrentPage * 10) : companies;
 
+  // جلب عدد المشاريع لكل شركة
+  const loadProjectsCounts = async (companiesList: Company[]) => {
+    try {
+      const counts: {[key: number]: number} = {};
+
+      // جلب عدد المشاريع لكل شركة بشكل متوازي
+      const promises = companiesList.map(async (company) => {
+        try {
+          const response = await companiesSubscribedApi.getCompanyTotalProjectsCount(company.id);
+          if (response.success && response.data) {
+            counts[company.id] = response.data.count;
+          } else {
+            counts[company.id] = 0;
+          }
+        } catch (error) {
+          console.error(`خطأ في جلب عدد المشاريع للشركة ${company.id}:`, error);
+          counts[company.id] = 0;
+        }
+      });
+
+      await Promise.all(promises);
+      setProjectsCounts(counts);
+    } catch (error) {
+      console.error('خطأ في جلب أعداد المشاريع:', error);
+    }
+  };
+
   // تحميل البيانات عند بداية التحميل
   useEffect(() => {
     console.log('بدء تحميل الشركات - النظام المختلط الموثوق');
@@ -966,6 +1005,7 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
               <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>العنوان والموقع</TableCell>
               <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>تفاصيل الاشتراك (ميلادي)</TableCell>
               <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>الفروع</TableCell>
+              <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>المشاريع</TableCell>
               <TableCell>الحالة</TableCell>
               <TableCell>الإجراءات</TableCell>
             </TableRow>
@@ -986,6 +1026,9 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
                   </TableCell>
                   <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                     <Skeleton variant="text" width="40%" />
+                  </TableCell>
+                  <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
+                    <Skeleton variant="text" width="30%" />
                   </TableCell>
                   <TableCell>
                     <Skeleton variant="rectangular" width={60} height={24} />
@@ -1038,6 +1081,16 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
                       </Typography>
                     </Box>
                   </TableCell>
+                  <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <ProjectIcon fontSize="small" color="action" />
+                      <Typography variant="body2">
+                        {projectsCounts[company.id] !== undefined ? projectsCounts[company.id] : (
+                          <CircularProgress size={16} />
+                        )}
+                      </Typography>
+                    </Box>
+                  </TableCell>
                   <TableCell>
                     <Chip
                       label={company.isActive ? 'نشط' : 'غير نشط'}
@@ -1073,7 +1126,7 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={7}>
                   <Box sx={{ textAlign: 'center', py: 4 }}>
                     <BusinessIcon sx={{ fontSize: { xs: 40, sm: 64 }, color: 'text.secondary', mb: 2 }} />
                     <Typography variant="h6" color="text.secondary">
