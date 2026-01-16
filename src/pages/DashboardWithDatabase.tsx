@@ -46,14 +46,14 @@ import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line, Area, AreaChart } from 'recharts';
 
 // استيراد APIs الحقيقية المفعلة حديثاً
-import { 
-  fetchDashboardStats, 
-  fetchDashboardReports, 
+import {
+  fetchDashboardStats,
+  fetchDashboardReports,
   fetchCompanies,
   formatDashboardCurrency,
   formatDashboardDate,
   formatProjectStatus,
-  calculatePercentage 
+  calculatePercentage
 } from '../api';
 
 // CSS للـ animations
@@ -156,15 +156,15 @@ interface ReportsData {
 }
 
 // مكون بطاقة إحصائية محسنة
-const EnhancedStatCard = ({ 
-  title, 
-  value, 
-  icon, 
-  color, 
-  bgColor, 
-  trend, 
+const EnhancedStatCard = ({
+  title,
+  value,
+  icon,
+  color,
+  bgColor,
+  trend,
   subtitle,
-  delay = 0 
+  delay = 0
 }: {
   title: string;
   value: number;
@@ -176,12 +176,12 @@ const EnhancedStatCard = ({
   delay?: number;
 }) => {
   const theme = useTheme();
-  
+
   return (
-    <Card 
-      sx={{ 
+    <Card
+      sx={{
         height: '100%',
-        background: theme.palette.mode === 'dark' 
+        background: theme.palette.mode === 'dark'
           ? `linear-gradient(135deg, ${bgColor}15 0%, ${bgColor}25 100%)`
           : `linear-gradient(135deg, ${bgColor}08 0%, ${bgColor}20 100%)`,
         border: `1px solid ${color}30`,
@@ -191,8 +191,8 @@ const EnhancedStatCard = ({
         animation: `slideInUp 0.6s ease-out ${delay}s both`,
         '&:hover': {
           transform: 'translateY(-8px) scale(1.02)',
-          boxShadow: theme.palette.mode === 'dark' 
-            ? `0 20px 40px ${color}40` 
+          boxShadow: theme.palette.mode === 'dark'
+            ? `0 20px 40px ${color}40`
             : `0 20px 40px ${color}25`,
           '& .stat-icon': {
             animation: 'bounce 2s infinite'
@@ -212,12 +212,12 @@ const EnhancedStatCard = ({
     >
       <CardContent sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <Avatar 
+          <Avatar
             className="stat-icon"
-            sx={{ 
-              bgcolor: color, 
-              mr: 2, 
-              width: 60, 
+            sx={{
+              bgcolor: color,
+              mr: 2,
+              width: 60,
               height: 60,
               boxShadow: `0 8px 25px ${color}40`,
               background: `linear-gradient(135deg, ${color} 0%, ${color}CC 100%)`
@@ -226,12 +226,12 @@ const EnhancedStatCard = ({
             {icon}
           </Avatar>
           <Box sx={{ flex: 1 }}>
-            <Typography 
-              variant="h3" 
-              component="div" 
-              sx={{ 
+            <Typography
+              variant="h3"
+              component="div"
+              sx={{
                 fontWeight: 'bold',
-                background: theme.palette.mode === 'dark' 
+                background: theme.palette.mode === 'dark'
                   ? `linear-gradient(135deg, ${theme.palette.text.primary} 0%, ${color} 100%)`
                   : `linear-gradient(135deg, ${color} 0%, ${theme.palette.text.primary} 100%)`,
                 backgroundClip: 'text',
@@ -242,9 +242,9 @@ const EnhancedStatCard = ({
             >
               {value.toLocaleString('en-GB')}
             </Typography>
-            <Typography 
-              variant="body2" 
-              sx={{ 
+            <Typography
+              variant="body2"
+              sx={{
                 color: theme.palette.text.secondary,
                 fontWeight: 600,
                 mb: 1
@@ -259,16 +259,16 @@ const EnhancedStatCard = ({
             )}
             {trend !== undefined && (
               <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                <TrendingUpIcon 
-                  sx={{ 
-                    fontSize: 16, 
+                <TrendingUpIcon
+                  sx={{
+                    fontSize: 16,
                     color: trend > 0 ? '#4caf50' : '#f44336',
                     mr: 0.5
-                  }} 
+                  }}
                 />
-                <Typography 
-                  variant="caption" 
-                  sx={{ 
+                <Typography
+                  variant="caption"
+                  sx={{
                     color: trend > 0 ? '#4caf50' : '#f44336',
                     fontWeight: 'bold'
                   }}
@@ -295,21 +295,21 @@ const EnhancedPieChart = ({ data, title }: { data: any[], title: string }) => {
     '#98D8C8', // أخضر نعناعي
     '#F7DC6F'  // أصفر ذهبي
   ];
-  
+
   console.log('EnhancedPieChart data:', data);
-  
+
   return (
-    <Card sx={{ 
+    <Card sx={{
       height: '100%',
-      background: theme.palette.mode === 'dark' 
+      background: theme.palette.mode === 'dark'
         ? 'linear-gradient(145deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%)'
         : 'linear-gradient(145deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)',
-      border: theme.palette.mode === 'dark' 
-        ? '1px solid rgba(255,255,255,0.1)' 
+      border: theme.palette.mode === 'dark'
+        ? '1px solid rgba(255,255,255,0.1)'
         : '1px solid rgba(0,0,0,0.05)',
       borderRadius: (theme) => theme.shape.borderRadius,
-      boxShadow: theme.palette.mode === 'dark' 
-        ? '0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2)' 
+      boxShadow: theme.palette.mode === 'dark'
+        ? '0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2)'
         : '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
       overflow: 'hidden',
       position: 'relative',
@@ -325,17 +325,17 @@ const EnhancedPieChart = ({ data, title }: { data: any[], title: string }) => {
     }}>
       <CardContent sx={{ p: 4 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <Box sx={{ 
-            p: 1.5, 
-            borderRadius: (theme) => theme.shape.borderRadius, 
+          <Box sx={{
+            p: 1.5,
+            borderRadius: (theme) => theme.shape.borderRadius,
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            mr: 2 
+            mr: 2
           }}>
             <AnalyticsIcon sx={{ color: 'white', fontSize: 24 }} />
           </Box>
-          <Typography 
-            variant="h6" 
-            sx={{ 
+          <Typography
+            variant="h6"
+            sx={{
               fontWeight: 700,
               background: theme.palette.mode === 'dark'
                 ? 'linear-gradient(135deg, #ffffff 0%, #e2e8f0 100%)'
@@ -349,7 +349,7 @@ const EnhancedPieChart = ({ data, title }: { data: any[], title: string }) => {
             {title}
           </Typography>
         </Box>
-        
+
         {data && data.length > 0 ? (
           <ResponsiveContainer width="100%" height={320}>
             <PieChart>
@@ -373,13 +373,13 @@ const EnhancedPieChart = ({ data, title }: { data: any[], title: string }) => {
                 stroke="none"
               >
                 {data.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
+                  <Cell
+                    key={`cell-${index}`}
                     fill={`url(#gradient-${index})`}
                   />
                 ))}
               </Pie>
-              <RechartsTooltip 
+              <RechartsTooltip
                 contentStyle={{
                   backgroundColor: theme.palette.mode === 'dark' ? '#1a1a1a' : '#ffffff',
                   border: 'none',
@@ -388,17 +388,17 @@ const EnhancedPieChart = ({ data, title }: { data: any[], title: string }) => {
                   color: theme.palette.mode === 'dark' ? '#ffffff' : theme.palette.text.primary,
                   padding: '12px 16px'
                 }}
-                                 formatter={(value, name) => [
-                   <span style={{ color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>{`${value} ${value === 1 ? 'شركة' : 'شركات'}`}</span>, 
-                   <span style={{ color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>{name}</span>
-                 ]}
+                formatter={(value, name) => [
+                  <span style={{ color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>{`${value} ${value === 1 ? 'شركة' : 'شركات'}`}</span>,
+                  <span style={{ color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>{name}</span>
+                ]}
                 labelFormatter={(label) => (
                   <span style={{ fontWeight: 'bold', fontSize: '14px', color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>
                     {label}
                   </span>
                 )}
               />
-              <Legend 
+              <Legend
                 wrapperStyle={{
                   paddingTop: '20px',
                   fontSize: '14px',
@@ -408,10 +408,10 @@ const EnhancedPieChart = ({ data, title }: { data: any[], title: string }) => {
             </PieChart>
           </ResponsiveContainer>
         ) : (
-          <Box sx={{ 
-            height: 320, 
-            display: 'flex', 
-            alignItems: 'center', 
+          <Box sx={{
+            height: 320,
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'center',
             flexDirection: 'column',
             gap: 2,
@@ -431,21 +431,21 @@ const EnhancedPieChart = ({ data, title }: { data: any[], title: string }) => {
 // مكون مخطط أعمدة محسن
 const EnhancedBarChart = ({ data, title }: { data: any[], title: string }) => {
   const theme = useTheme();
-  
+
   console.log('EnhancedBarChart data:', data);
-  
+
   return (
-    <Card sx={{ 
+    <Card sx={{
       height: '100%',
-      background: theme.palette.mode === 'dark' 
+      background: theme.palette.mode === 'dark'
         ? 'linear-gradient(145deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%)'
         : 'linear-gradient(145deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)',
-      border: theme.palette.mode === 'dark' 
-        ? '1px solid rgba(255,255,255,0.1)' 
+      border: theme.palette.mode === 'dark'
+        ? '1px solid rgba(255,255,255,0.1)'
         : '1px solid rgba(0,0,0,0.05)',
       borderRadius: 3,
-      boxShadow: theme.palette.mode === 'dark' 
-        ? '0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2)' 
+      boxShadow: theme.palette.mode === 'dark'
+        ? '0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2)'
         : '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
       overflow: 'hidden',
       position: 'relative',
@@ -461,17 +461,17 @@ const EnhancedBarChart = ({ data, title }: { data: any[], title: string }) => {
     }}>
       <CardContent sx={{ p: 4 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <Box sx={{ 
-            p: 1.5, 
-            borderRadius: 2, 
+          <Box sx={{
+            p: 1.5,
+            borderRadius: 2,
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            mr: 2 
+            mr: 2
           }}>
             <AssessmentIcon sx={{ color: 'white', fontSize: 24 }} />
           </Box>
-          <Typography 
-            variant="h6" 
-            sx={{ 
+          <Typography
+            variant="h6"
+            sx={{
               fontWeight: 700,
               background: theme.palette.mode === 'dark'
                 ? 'linear-gradient(135deg, #ffffff 0%, #e2e8f0 100%)'
@@ -485,10 +485,10 @@ const EnhancedBarChart = ({ data, title }: { data: any[], title: string }) => {
             {title}
           </Typography>
         </Box>
-        
+
         {data && data.length > 0 ? (
           <ResponsiveContainer width="100%" height={320}>
-            <BarChart 
+            <BarChart
               data={data}
               margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
             >
@@ -498,15 +498,15 @@ const EnhancedBarChart = ({ data, title }: { data: any[], title: string }) => {
                   <stop offset="100%" stopColor="#764ba2" stopOpacity={0.8} />
                 </linearGradient>
               </defs>
-              <CartesianGrid 
-                strokeDasharray="3 3" 
-                stroke={theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke={theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}
                 vertical={false}
               />
-              <XAxis 
+              <XAxis
                 dataKey="name"
-                tick={{ 
-                  fontSize: 13, 
+                tick={{
+                  fontSize: 13,
                   fill: theme.palette.mode === 'dark' ? '#ffffff' : '#000000',
                   fontWeight: 600
                 }}
@@ -517,20 +517,20 @@ const EnhancedBarChart = ({ data, title }: { data: any[], title: string }) => {
                 height={100}
                 interval={0}
               />
-              <YAxis 
-                tick={{ 
-                  fontSize: 14, 
+              <YAxis
+                tick={{
+                  fontSize: 14,
                   fill: theme.palette.mode === 'dark' ? '#ffffff' : '#000000',
                   fontWeight: 600
                 }}
                 axisLine={false}
                 tickLine={false}
                 domain={[0, 'dataMax + 5']}
-                label={{ 
+                label={{
                   value: 'عدد المشاريع',
                   angle: -90,
                   position: 'insideLeft',
-                  style: { 
+                  style: {
                     textAnchor: 'middle',
                     fill: theme.palette.mode === 'dark' ? '#ffffff' : '#000000',
                     fontSize: 14,
@@ -538,7 +538,7 @@ const EnhancedBarChart = ({ data, title }: { data: any[], title: string }) => {
                   }
                 }}
               />
-              <RechartsTooltip 
+              <RechartsTooltip
                 contentStyle={{
                   backgroundColor: theme.palette.mode === 'dark' ? '#1a1a1a' : '#ffffff',
                   border: 'none',
@@ -547,10 +547,10 @@ const EnhancedBarChart = ({ data, title }: { data: any[], title: string }) => {
                   color: theme.palette.mode === 'dark' ? '#ffffff' : theme.palette.text.primary,
                   padding: '12px 16px'
                 }}
-                                 formatter={(value, name) => [
-                   <span style={{ color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>{`${value} ${value === 1 ? 'مشروع' : 'مشاريع'}`}</span>, 
-                   <span style={{ color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>{name}</span>
-                 ]}
+                formatter={(value, name) => [
+                  <span style={{ color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>{`${value} ${value === 1 ? 'مشروع' : 'مشاريع'}`}</span>,
+                  <span style={{ color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>{name}</span>
+                ]}
                 labelFormatter={(label) => (
                   <span style={{ fontWeight: 'bold', fontSize: '14px', color: theme.palette.mode === 'dark' ? '#ffffff' : 'inherit' }}>
                     {label}
@@ -558,8 +558,8 @@ const EnhancedBarChart = ({ data, title }: { data: any[], title: string }) => {
                 )}
                 cursor={{ fill: 'rgba(102, 126, 234, 0.1)' }}
               />
-              <Bar 
-                dataKey="value" 
+              <Bar
+                dataKey="value"
                 fill="url(#barGradient)"
                 radius={[8, 8, 0, 0]}
                 stroke="none"
@@ -568,10 +568,10 @@ const EnhancedBarChart = ({ data, title }: { data: any[], title: string }) => {
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <Box sx={{ 
-            height: 320, 
-            display: 'flex', 
-            alignItems: 'center', 
+          <Box sx={{
+            height: 320,
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'center',
             flexDirection: 'column',
             gap: 2,
@@ -596,7 +596,7 @@ const DashboardWithDatabase = () => {
   const [companies, setCompanies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // 🔄 التحديث التلقائي الدائم
   const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
@@ -605,25 +605,25 @@ const DashboardWithDatabase = () => {
   const fetchDashboardData = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       console.log('🚀 جاري جلب بيانات الداشبورد باستخدام APIs الجديدة...');
-      
+
       // جلب إحصائيات الداشبورد باستخدام APIs الجديدة
       const [dashboardStats, companiesData, reportsData] = await Promise.all([
         fetchDashboardStats(),
         fetchCompanies({ page: 1, limit: 10 }),
         fetchDashboardReports()
       ]);
-      
+
       console.log('✅ Dashboard stats (NEW API):', dashboardStats);
       console.log('✅ Companies data (NEW API):', companiesData);
       console.log('✅ Reports data (NEW API):', reportsData);
-      
+
       // تحديث حالة البيانات
       setDashboardData(dashboardStats);
       setCompanies(companiesData.companies || []);
-      
+
       // تحويل بيانات التقارير لتتوافق مع التوقعات
       const transformedReportsData: ReportsData = {
         companies: reportsData.companies || [],
@@ -631,11 +631,11 @@ const DashboardWithDatabase = () => {
         monthlyStats: reportsData.monthlyStats || [],
         companiesByCity: reportsData.companiesByCity || []
       };
-      
+
       console.log('📊 Transformed reports data:', transformedReportsData);
-      
+
       setReportsData(transformedReportsData);
-      
+
     } catch (err: any) {
       console.error('❌ Error fetching dashboard data with NEW APIs:', err);
       setError('فشل في جلب بيانات الداشبورد: ' + (err.message || 'خطأ غير معروف'));
@@ -653,7 +653,7 @@ const DashboardWithDatabase = () => {
     const interval = setInterval(async () => {
       console.log('🔄 تحديث تلقائي للداشبورد...', new Date().toLocaleTimeString());
       setIsAutoRefreshing(true);
-      
+
       try {
         await fetchDashboardData();
         setLastRefreshTime(new Date());
@@ -697,26 +697,26 @@ const DashboardWithDatabase = () => {
 
   if (loading) {
     return (
-      <Box 
-        sx={{ 
-          display: 'flex', 
+      <Box
+        sx={{
+          display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center', 
-          justifyContent: 'center', 
+          alignItems: 'center',
+          justifyContent: 'center',
           height: '60vh',
           gap: 3
         }}
       >
-        <CircularProgress 
-          size={80} 
-          sx={{ 
+        <CircularProgress
+          size={80}
+          sx={{
             color: theme.palette.primary.main,
             animation: 'glow 2s ease-in-out infinite'
-          }} 
+          }}
         />
-        <Typography 
-          variant="h6" 
-          sx={{ 
+        <Typography
+          variant="h6"
+          sx={{
             color: theme.palette.text.secondary,
             fontWeight: 'bold',
             textAlign: 'center'
@@ -734,16 +734,16 @@ const DashboardWithDatabase = () => {
   if (error) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert 
-          severity="error" 
-          sx={{ 
+        <Alert
+          severity="error"
+          sx={{
             borderRadius: 3,
             boxShadow: '0 8px 25px rgba(244, 67, 54, 0.15)'
           }}
           action={
-            <Button 
-              color="inherit" 
-              size="small" 
+            <Button
+              color="inherit"
+              size="small"
               onClick={handleRefresh}
               sx={{ fontWeight: 'bold' }}
             >
@@ -761,14 +761,14 @@ const DashboardWithDatabase = () => {
   if (!dashboardData) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert 
+        <Alert
           severity="warning"
-          sx={{ 
+          sx={{
             borderRadius: 3,
             boxShadow: '0 8px 25px rgba(255, 152, 0, 0.15)'
           }}
         >
-                      <Typography variant="h6">لا توجد بيانات</Typography>
+          <Typography variant="h6">لا توجد بيانات</Typography>
           لا توجد بيانات متاحة في قاعدة البيانات
         </Alert>
       </Box>
@@ -776,22 +776,22 @@ const DashboardWithDatabase = () => {
   }
 
   return (
-    <Box sx={{ 
-      p: { xs: 2, md: 3 }, 
-      backgroundColor: theme.palette.background.default, 
-      minHeight: '100vh' 
+    <Box sx={{
+      p: { xs: 2, md: 3 },
+      backgroundColor: theme.palette.background.default,
+      minHeight: '100vh'
     }}>
       {/* رأس الصفحة المحسن */}
-      <Box sx={{ 
+      <Box sx={{
         mb: 4,
         p: { xs: 2.5, md: 4 },
-        background: theme.palette.mode === 'dark' 
+        background: theme.palette.mode === 'dark'
           ? 'linear-gradient(145deg, #0f1419 0%, #1a1a2e 25%, #16213e 50%, #0f3460 75%, #001122 100%)'
           : 'linear-gradient(145deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #667eea 75%, #764ba2 100%)',
         borderRadius: 5,
         color: 'white',
-        boxShadow: theme.palette.mode === 'dark' 
-          ? '0 25px 50px -12px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1)' 
+        boxShadow: theme.palette.mode === 'dark'
+          ? '0 25px 50px -12px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1)'
           : '0 25px 50px -12px rgba(102, 126, 234, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)',
         position: 'relative',
         overflow: 'hidden',
@@ -809,9 +809,9 @@ const DashboardWithDatabase = () => {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 1 }}>
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <Box sx={{ 
-                p: 1.5, 
-                borderRadius: 3, 
+              <Box sx={{
+                p: 1.5,
+                borderRadius: 3,
                 background: 'rgba(255,255,255,0.15)',
                 backdropFilter: 'blur(10px)',
                 border: '1px solid rgba(255,255,255,0.2)',
@@ -821,10 +821,10 @@ const DashboardWithDatabase = () => {
                 <SpeedIcon sx={{ fontSize: 32, color: 'white' }} />
               </Box>
               <Box>
-                <Typography 
-                  variant="h3" 
-                  component="h1" 
-                  sx={{ 
+                <Typography
+                  variant="h3"
+                  component="h1"
+                  sx={{
                     fontWeight: 800,
                     mb: 0.5,
                     fontSize: { xs: '1.8rem', sm: '2.5rem', md: '3rem' },
@@ -837,9 +837,9 @@ const DashboardWithDatabase = () => {
                 >
                   لوحة التحكم الذكية
                 </Typography>
-                <Typography 
-                  variant="h6" 
-                  sx={{ 
+                <Typography
+                  variant="h6"
+                  sx={{
                     opacity: 0.95,
                     fontWeight: 500,
                     fontSize: { xs: '0.9rem', sm: '1.1rem' }
@@ -851,8 +851,8 @@ const DashboardWithDatabase = () => {
             </Box>
           </Box>
           {/* مؤشر التحديث التلقائي وزر التحديث اليدوي */}
-          <Box sx={{ 
-            display: 'flex', 
+          <Box sx={{
+            display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-end',
             gap: 1.5
@@ -863,11 +863,11 @@ const DashboardWithDatabase = () => {
               disabled={isAutoRefreshing}
               variant="contained"
               startIcon={
-                <RefreshIcon 
-                  sx={{ 
+                <RefreshIcon
+                  sx={{
                     animation: isAutoRefreshing ? 'spin 1s linear infinite' : 'none',
                     transform: isAutoRefreshing ? 'rotate(360deg)' : 'rotate(0deg)'
-                  }} 
+                  }}
                 />
               }
               sx={{
@@ -903,24 +903,24 @@ const DashboardWithDatabase = () => {
             >
               {isAutoRefreshing ? 'جاري التحديث...' : 'تحديث البيانات'}
             </Button>
-            
+
             {/* مؤشر التحديث التلقائي */}
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 1.5, 
-              bgcolor: 'rgba(255,255,255,0.15)', 
-              px: 3, 
-              py: 1.5, 
+            <Box sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              bgcolor: 'rgba(255,255,255,0.15)',
+              px: 3,
+              py: 1.5,
               borderRadius: 3,
               border: '1px solid rgba(255,255,255,0.2)',
               backdropFilter: 'blur(10px)',
               boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2)'
             }}>
-              <Box sx={{ 
-                width: 10, 
-                height: 10, 
-                borderRadius: '50%', 
+              <Box sx={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
                 bgcolor: isAutoRefreshing ? '#ff9800' : '#4caf50',
                 boxShadow: `0 0 20px ${isAutoRefreshing ? '#ff9800' : '#4caf50'}`,
                 animation: isAutoRefreshing ? 'pulse 1s infinite' : 'glow 2s infinite'
@@ -958,7 +958,7 @@ const DashboardWithDatabase = () => {
             icon={<AccountTreeIcon />}
             color={theme.palette.success.main}
             bgColor={theme.palette.success.main}
-            subtitle="فروع نشطة وفعالة"
+            subtitle="فروع مسجلة في النظام"
             delay={0.1}
           />
         </Grid>
@@ -990,14 +990,14 @@ const DashboardWithDatabase = () => {
       {reportsData && (
         <Box sx={{ mb: 5 }}>
           {/* عنوان قسم الرسوم البيانية */}
-          <Box sx={{ 
-            mb: 4, 
+          <Box sx={{
+            mb: 4,
             textAlign: 'center',
             position: 'relative'
           }}>
-            <Typography 
-              variant="h4" 
-              sx={{ 
+            <Typography
+              variant="h4"
+              sx={{
                 fontWeight: 800,
                 background: theme.palette.mode === 'dark'
                   ? 'linear-gradient(135deg, #ffffff 0%, #e2e8f0 50%, #94a3b8 100%)'
@@ -1022,9 +1022,9 @@ const DashboardWithDatabase = () => {
             >
               📊 تحليلات البيانات
             </Typography>
-            <Typography 
-              variant="h6" 
-              sx={{ 
+            <Typography
+              variant="h6"
+              sx={{
                 color: theme.palette.text.secondary,
                 fontWeight: 500,
                 fontSize: '1.1rem'
@@ -1035,47 +1035,47 @@ const DashboardWithDatabase = () => {
           </Box>
 
           <Grid container spacing={{ xs: 2, md: 4 }}>
-          <Grid item xs={12} md={6}>
-            <EnhancedPieChart 
-              data={reportsData.companiesByCity.map((city, index) => ({
-                name: city.City,
-                value: city.count,
-                color: [
-                  '#FF6B6B', // أحمر حديث
-                  '#4ECDC4', // أخضر مائي
-                  '#45B7D1', // أزرق فاتح
-                  '#FFA07A', // برتقالي فاتح
-                  '#98D8C8', // أخضر نعناعي
-                  '#F7DC6F', // أصفر ذهبي
-                  '#DDA0DD', // بنفسجي فاتح
-                  '#87CEEB'  // أزرق سماوي
-                ][index % 8]
-              }))} 
-              title="توزيع الشركات حسب المدن" 
-            />
+            <Grid item xs={12} md={6}>
+              <EnhancedPieChart
+                data={reportsData.companiesByCity.map((city, index) => ({
+                  name: city.City,
+                  value: city.count,
+                  color: [
+                    '#FF6B6B', // أحمر حديث
+                    '#4ECDC4', // أخضر مائي
+                    '#45B7D1', // أزرق فاتح
+                    '#FFA07A', // برتقالي فاتح
+                    '#98D8C8', // أخضر نعناعي
+                    '#F7DC6F', // أصفر ذهبي
+                    '#DDA0DD', // بنفسجي فاتح
+                    '#87CEEB'  // أزرق سماوي
+                  ][index % 8]
+                }))}
+                title="توزيع الشركات حسب المدن"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <EnhancedBarChart
+                data={reportsData && reportsData.companies ?
+                  reportsData.companies
+                    .filter(company => company.totalProjects && company.totalProjects > 0)
+                    .slice(0, 8)
+                    .map(company => ({
+                      name: company.NameCompany && company.NameCompany.length > 20 ?
+                        company.NameCompany.substring(0, 20) + '...' :
+                        company.NameCompany || 'غير محدد',
+                      value: parseInt(company.totalProjects) || 0,
+                      fullName: company.NameCompany || 'غير محدد'
+                    })) :
+                  [
+                    { name: 'لا توجد بيانات', value: 0, fullName: 'لا توجد بيانات' }
+                  ]
+                }
+                title="أكثر الشركات نشاطاً (عدد المشاريع)"
+              />
+            </Grid>
           </Grid>
-          <Grid item xs={12} md={6}>
-            <EnhancedBarChart 
-              data={reportsData && reportsData.companies ? 
-                reportsData.companies
-                  .filter(company => company.totalProjects && company.totalProjects > 0)
-                  .slice(0, 8)
-                  .map(company => ({
-                    name: company.NameCompany && company.NameCompany.length > 20 ? 
-                      company.NameCompany.substring(0, 20) + '...' : 
-                      company.NameCompany || 'غير محدد',
-                    value: parseInt(company.totalProjects) || 0,
-                    fullName: company.NameCompany || 'غير محدد'
-                  })) : 
-                [
-                  { name: 'لا توجد بيانات', value: 0, fullName: 'لا توجد بيانات' }
-                ]
-              } 
-              title="أكثر الشركات نشاطاً (عدد المشاريع)" 
-            />
-          </Grid>
-        </Grid>
-      </Box>
+        </Box>
       )}
 
       {/* جدول أداء الفروع */}
@@ -1084,9 +1084,9 @@ const DashboardWithDatabase = () => {
           <Typography variant="h5" sx={{ mb: 3, fontWeight: 'bold', color: 'primary.main' }}>
             🏪 أداء الفروع والمشاريع
           </Typography>
-          
+
           <Card sx={{ overflow: 'hidden' }}>
-            <Box sx={{ 
+            <Box sx={{
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               color: 'white',
               p: 2
@@ -1095,16 +1095,16 @@ const DashboardWithDatabase = () => {
                 📊 ترتيب الشركات حسب الأداء
               </Typography>
             </Box>
-            
+
             <Box sx={{ maxHeight: { xs: 300, md: 400 }, overflow: 'auto' }}>
               {reportsData.companies
                 .filter(company => company.totalProjects > 0)
                 .slice(0, 6)
                 .map((company, index) => (
-                  <Box 
+                  <Box
                     key={company.id}
-                    sx={{ 
-                      p: 2, 
+                    sx={{
+                      p: 2,
                       borderBottom: '1px solid',
                       borderColor: 'divider',
                       display: 'flex',
@@ -1116,14 +1116,14 @@ const DashboardWithDatabase = () => {
                     }}
                   >
                     <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-                      <Box sx={{ 
-                        width: 40, 
-                        height: 40, 
+                      <Box sx={{
+                        width: 40,
+                        height: 40,
                         borderRadius: '50%',
                         background: index === 0 ? 'linear-gradient(135deg, #ffd700 0%, #ffa500 100%)' :
-                                   index === 1 ? 'linear-gradient(135deg, #c0c0c0 0%, #a0a0a0 100%)' :
-                                   index === 2 ? 'linear-gradient(135deg, #cd7f32 0%, #b8860b 100%)' :
-                                   'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)',
+                          index === 1 ? 'linear-gradient(135deg, #c0c0c0 0%, #a0a0a0 100%)' :
+                            index === 2 ? 'linear-gradient(135deg, #cd7f32 0%, #b8860b 100%)' :
+                              'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -1133,7 +1133,7 @@ const DashboardWithDatabase = () => {
                       }}>
                         {index + 1}
                       </Box>
-                      
+
                       <Box sx={{ flex: 1 }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                           {company.NameCompany}
@@ -1143,17 +1143,17 @@ const DashboardWithDatabase = () => {
                         </Typography>
                       </Box>
                     </Box>
-                    
+
                     <Box sx={{ textAlign: 'right', mr: 2 }}>
                       <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                         {company.totalProjects}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        مشروع نشط
+                        إجمالي المشاريع
                       </Typography>
                     </Box>
-                    
-                    <Box sx={{ 
+
+                    <Box sx={{
                       bgcolor: index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? '#cd7f32' : 'primary.light',
                       color: index < 3 ? 'white' : 'primary.dark',
                       px: 1.5,
@@ -1180,12 +1180,12 @@ const DashboardWithDatabase = () => {
           <Typography variant="h5" sx={{ mb: 3, fontWeight: 'bold', color: 'primary.main' }}>
             🚀 المشاريع عالية الأداء
           </Typography>
-          
+
           <Grid container spacing={2}>
             {reportsData.projects.slice(0, 4).map((project, index) => (
               <Grid item xs={12} sm={6} md={3} key={project.id}>
-                <Card sx={{ 
-                  p: { xs: 1.5, md: 2 }, 
+                <Card sx={{
+                  p: { xs: 1.5, md: 2 },
                   height: '100%',
                   border: '2px solid transparent',
                   borderColor: index === 0 ? 'primary.main' : 'transparent',
@@ -1197,13 +1197,13 @@ const DashboardWithDatabase = () => {
                   transition: 'all 0.3s ease'
                 }}>
                   {index === 0 && (
-                    <Box sx={{ 
-                      bgcolor: 'primary.main', 
-                      color: 'white', 
-                      px: 1, 
-                      py: 0.5, 
-                      borderRadius: 1, 
-                      fontSize: 10, 
+                    <Box sx={{
+                      bgcolor: 'primary.main',
+                      color: 'white',
+                      px: 1,
+                      py: 0.5,
+                      borderRadius: 1,
+                      fontSize: 10,
                       fontWeight: 'bold',
                       mb: 1,
                       display: 'inline-block'
@@ -1211,12 +1211,12 @@ const DashboardWithDatabase = () => {
                       🏆 الأفضل
                     </Box>
                   )}
-                  
-                   <Typography variant="h6" sx={{ 
-                    fontWeight: 'bold', 
-                     fontSize: { xs: 13, md: 14 },
+
+                  <Typography variant="h6" sx={{
+                    fontWeight: 'bold',
+                    fontSize: { xs: 13, md: 14 },
                     mb: 1,
-                     height: { xs: 36, md: 40 },
+                    height: { xs: 36, md: 40 },
                     overflow: 'hidden',
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
@@ -1224,7 +1224,7 @@ const DashboardWithDatabase = () => {
                   }}>
                     {project.Nameproject}
                   </Typography>
-                  
+
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>
                       {project.NameCompany}
@@ -1233,7 +1233,7 @@ const DashboardWithDatabase = () => {
                       {project.NameSub}
                     </Typography>
                   </Box>
-                  
+
                   <Box sx={{ mb: 2 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                       <Typography variant="body2" sx={{ fontSize: 12 }}>نسبة الإنجاز</Typography>
@@ -1241,29 +1241,29 @@ const DashboardWithDatabase = () => {
                         {Math.round(project.progress)}%
                       </Typography>
                     </Box>
-                    
-                    <Box sx={{ 
-                      height: 6, 
-                      bgcolor: 'grey.200', 
+
+                    <Box sx={{
+                      height: 6,
+                      bgcolor: 'grey.200',
                       borderRadius: 3,
                       overflow: 'hidden'
                     }}>
-                      <Box sx={{ 
+                      <Box sx={{
                         height: '100%',
                         width: `${Math.min(project.progress, 100)}%`,
-                        background: project.progress >= 90 ? 
+                        background: project.progress >= 90 ?
                           'linear-gradient(90deg, #4caf50 0%, #8bc34a 100%)' :
-                          project.progress >= 70 ? 
-                          'linear-gradient(90deg, #2196f3 0%, #03a9f4 100%)' :
-                          'linear-gradient(90deg, #ff9800 0%, #ffc107 100%)',
+                          project.progress >= 70 ?
+                            'linear-gradient(90deg, #2196f3 0%, #03a9f4 100%)' :
+                            'linear-gradient(90deg, #ff9800 0%, #ffc107 100%)',
                         borderRadius: 3,
                         transition: 'width 0.3s ease'
                       }} />
                     </Box>
                   </Box>
-                  
+
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box sx={{ 
+                    <Box sx={{
                       bgcolor: project.status === 'جاري العمل' ? 'success.light' : 'warning.light',
                       color: project.status === 'جاري العمل' ? 'success.dark' : 'warning.dark',
                       px: 1,
@@ -1274,7 +1274,7 @@ const DashboardWithDatabase = () => {
                     }}>
                       {project.status}
                     </Box>
-                    
+
                     {project.cost > 0 && (
                       <Typography variant="body2" sx={{ fontSize: 10, color: 'text.secondary' }}>
                         {Math.round(project.cost).toLocaleString()} ريال
@@ -1292,20 +1292,20 @@ const DashboardWithDatabase = () => {
         {/* أحدث الشركات */}
         <Grid item xs={12} md={6}>
           <Card sx={{
-            background: theme.palette.mode === 'dark' 
+            background: theme.palette.mode === 'dark'
               ? 'linear-gradient(135deg, #1e1e1e 0%, #2c2c2c 100%)'
               : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-            boxShadow: theme.palette.mode === 'dark' 
-              ? '0 8px 32px rgba(0,0,0,0.3)' 
+            boxShadow: theme.palette.mode === 'dark'
+              ? '0 8px 32px rgba(0,0,0,0.3)'
               : '0 8px 32px rgba(0,0,0,0.1)',
             animation: 'slideInUp 0.8s ease-out 0.6s both'
           }}>
             <CardContent sx={{ p: { xs: 2, md: 3 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography 
-                  variant="h6" 
+                <Typography
+                  variant="h6"
                   component="h2"
-                  sx={{ 
+                  sx={{
                     fontWeight: 'bold',
                     display: 'flex',
                     alignItems: 'center',
@@ -1316,11 +1316,11 @@ const DashboardWithDatabase = () => {
                   أحدث الشركات
                 </Typography>
                 <Tooltip title="عرض جميع الشركات">
-                  <IconButton 
+                  <IconButton
                     onClick={() => navigate('/companies-subscribed')}
-                    sx={{ 
+                    sx={{
                       bgcolor: theme.palette.primary.main + '15',
-                      '&:hover': { 
+                      '&:hover': {
                         bgcolor: theme.palette.primary.main + '25',
                         transform: 'scale(1.1)'
                       }
@@ -1346,7 +1346,7 @@ const DashboardWithDatabase = () => {
                     >
                       <ListItemAvatar>
                         <Badge badgeContent={index + 1} color="primary">
-                          <Avatar sx={{ 
+                          <Avatar sx={{
                             bgcolor: theme.palette.primary.main,
                             boxShadow: `0 4px 15px ${theme.palette.primary.main}40`
                           }}>
@@ -1371,13 +1371,13 @@ const DashboardWithDatabase = () => {
                         secondaryTypographyProps={{ component: 'div' }}
                       />
                     </ListItem>
-                    {index < (dashboardData.recentCompanies?.length || 0) - 1 && 
+                    {index < (dashboardData.recentCompanies?.length || 0) - 1 &&
                       <Divider sx={{ opacity: 0.3 }} />}
                   </React.Fragment>
                 ))}
                 {(dashboardData.recentCompanies?.length || 0) === 0 && (
                   <ListItem>
-                    <ListItemText 
+                    <ListItemText
                       primary={
                         <Typography sx={{ textAlign: 'center', color: theme.palette.text.secondary }}>
                           📝 لا توجد شركات جديدة
@@ -1399,20 +1399,20 @@ const DashboardWithDatabase = () => {
         {/* جميع الشركات */}
         <Grid item xs={12} md={6}>
           <Card sx={{
-            background: theme.palette.mode === 'dark' 
+            background: theme.palette.mode === 'dark'
               ? 'linear-gradient(135deg, #1e1e1e 0%, #2c2c2c 100%)'
               : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-            boxShadow: theme.palette.mode === 'dark' 
-              ? '0 8px 32px rgba(0,0,0,0.3)' 
+            boxShadow: theme.palette.mode === 'dark'
+              ? '0 8px 32px rgba(0,0,0,0.3)'
               : '0 8px 32px rgba(0,0,0,0.1)',
             animation: 'slideInUp 0.8s ease-out 0.8s both'
           }}>
             <CardContent sx={{ p: { xs: 2, md: 3 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography 
-                  variant="h6" 
+                <Typography
+                  variant="h6"
                   component="h2"
-                  sx={{ 
+                  sx={{
                     fontWeight: 'bold',
                     display: 'flex',
                     alignItems: 'center',
@@ -1443,71 +1443,71 @@ const DashboardWithDatabase = () => {
                   })
                   .slice(0, 5)
                   .map((company, index) => (
-                  <React.Fragment key={company.id}>
-                    <ListItem
-                      sx={{
-                        borderRadius: 2,
-                        mb: 1,
-                        '&:hover': {
-                          bgcolor: theme.palette.action.hover,
-                          transform: 'translateX(5px)'
-                        },
-                        transition: 'all 0.3s ease'
-                      }}
-                    >
-                      <ListItemAvatar>
-                        <Avatar sx={{ 
-                          bgcolor: theme.palette.secondary.main,
-                          boxShadow: `0 4px 15px ${theme.palette.secondary.main}40`,
-                          fontSize: '1.2rem',
-                          fontWeight: 'bold'
-                        }}>
-                          {company.name.charAt(0)}
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={
-                          <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                            {company.name}
-                          </Typography>
-                        }
-                        secondary={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                            <LocationIcon sx={{ fontSize: 14, color: theme.palette.text.secondary }} />
-                            <Typography variant="caption">
-                              {company.city}, {company.country}
+                    <React.Fragment key={company.id}>
+                      <ListItem
+                        sx={{
+                          borderRadius: 2,
+                          mb: 1,
+                          '&:hover': {
+                            bgcolor: theme.palette.action.hover,
+                            transform: 'translateX(5px)'
+                          },
+                          transition: 'all 0.3s ease'
+                        }}
+                      >
+                        <ListItemAvatar>
+                          <Avatar sx={{
+                            bgcolor: theme.palette.secondary.main,
+                            boxShadow: `0 4px 15px ${theme.palette.secondary.main}40`,
+                            fontSize: '1.2rem',
+                            fontWeight: 'bold'
+                          }}>
+                            {company.name.charAt(0)}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                              {company.name}
                             </Typography>
-                            <Chip 
-                              label={company.isActive ? 'نشط' : 'غير نشط'}
-                              size="small"
-                              icon={company.isActive ? <CheckCircleIcon /> : <WarningIcon />}
-                              sx={{
-                                backgroundColor: company.isActive ? '#4caf50' : '#9e9e9e',
-                                color: 'white',
-                                fontWeight: 'bold',
-                                '& .MuiChip-label': {
+                          }
+                          secondary={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                              <LocationIcon sx={{ fontSize: 14, color: theme.palette.text.secondary }} />
+                              <Typography variant="caption">
+                                {company.city}, {company.country}
+                              </Typography>
+                              <Chip
+                                label={company.isActive ? 'نشط' : 'غير نشط'}
+                                size="small"
+                                icon={company.isActive ? <CheckCircleIcon /> : <WarningIcon />}
+                                sx={{
+                                  backgroundColor: company.isActive ? '#4caf50' : '#9e9e9e',
                                   color: 'white',
-                                  fontWeight: 'bold'
-                                },
-                                '& .MuiChip-icon': {
-                                  color: 'white'
-                                },
-                                boxShadow: company.isActive ? '0 2px 4px rgba(76, 175, 80, 0.3)' : '0 2px 4px rgba(158, 158, 158, 0.3)',
-                                border: 'none'
-                              }}
-                            />
-                          </Box>
-                        }
-                        secondaryTypographyProps={{ component: 'div' }}
-                      />
-                    </ListItem>
-                    {index < Math.min(companies?.length || 0, 5) - 1 && 
-                      <Divider sx={{ opacity: 0.3 }} />}
-                  </React.Fragment>
-                ))}
+                                  fontWeight: 'bold',
+                                  '& .MuiChip-label': {
+                                    color: 'white',
+                                    fontWeight: 'bold'
+                                  },
+                                  '& .MuiChip-icon': {
+                                    color: 'white'
+                                  },
+                                  boxShadow: company.isActive ? '0 2px 4px rgba(76, 175, 80, 0.3)' : '0 2px 4px rgba(158, 158, 158, 0.3)',
+                                  border: 'none'
+                                }}
+                              />
+                            </Box>
+                          }
+                          secondaryTypographyProps={{ component: 'div' }}
+                        />
+                      </ListItem>
+                      {index < Math.min(companies?.length || 0, 5) - 1 &&
+                        <Divider sx={{ opacity: 0.3 }} />}
+                    </React.Fragment>
+                  ))}
                 {(companies?.length || 0) === 0 && (
                   <ListItem>
-                    <ListItemText 
+                    <ListItemText
                       primary={
                         <Typography sx={{ textAlign: 'center', color: theme.palette.text.secondary }}>
                           🏢 لا توجد شركات في قاعدة البيانات
@@ -1530,19 +1530,19 @@ const DashboardWithDatabase = () => {
         {dashboardData.recentProjects && dashboardData.recentProjects.length > 0 && (
           <Grid item xs={12}>
             <Card sx={{
-              background: theme.palette.mode === 'dark' 
+              background: theme.palette.mode === 'dark'
                 ? 'linear-gradient(135deg, #1e1e1e 0%, #2c2c2c 100%)'
                 : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-              boxShadow: theme.palette.mode === 'dark' 
-                ? '0 8px 32px rgba(0,0,0,0.3)' 
+              boxShadow: theme.palette.mode === 'dark'
+                ? '0 8px 32px rgba(0,0,0,0.3)'
                 : '0 8px 32px rgba(0,0,0,0.1)',
               animation: 'slideInUp 0.8s ease-out 1s both'
             }}>
               <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-                <Typography 
-                  variant="h6" 
-                  component="h2" 
-                  sx={{ 
+                <Typography
+                  variant="h6"
+                  component="h2"
+                  sx={{
                     mb: 3,
                     fontWeight: 'bold',
                     display: 'flex',
@@ -1569,7 +1569,7 @@ const DashboardWithDatabase = () => {
                         }}
                       >
                         <ListItemAvatar>
-                          <Avatar sx={{ 
+                          <Avatar sx={{
                             bgcolor: theme.palette.info.main,
                             boxShadow: `0 4px 15px ${theme.palette.info.main}40`
                           }}>
@@ -1588,14 +1588,14 @@ const DashboardWithDatabase = () => {
                                 🏢 الشركة: {project.companyName} • 🏪 الفرع: {project.subName}
                               </Typography>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Chip 
+                                <Chip
                                   label={project.status}
                                   size="small"
                                   icon={project.status === 'نشط' ? <CheckCircleIcon /> : <ScheduleIcon />}
                                   sx={{
-                                    backgroundColor: project.status === 'نشط' ? '#4caf50' : 
-                                                   project.status === 'منجز' ? '#2196f3' : 
-                                                   project.status === 'متوقف' ? '#f44336' : '#ff9800',
+                                    backgroundColor: project.status === 'نشط' ? '#4caf50' :
+                                      project.status === 'منجز' ? '#2196f3' :
+                                        project.status === 'متوقف' ? '#f44336' : '#ff9800',
                                     color: 'white',
                                     fontWeight: 'bold',
                                     '& .MuiChip-label': {
@@ -1605,9 +1605,9 @@ const DashboardWithDatabase = () => {
                                     '& .MuiChip-icon': {
                                       color: 'white'
                                     },
-                                    boxShadow: project.status === 'نشط' ? '0 2px 4px rgba(76, 175, 80, 0.3)' : 
-                                             project.status === 'منجز' ? '0 2px 4px rgba(33, 150, 243, 0.3)' : 
-                                             project.status === 'متوقف' ? '0 2px 4px rgba(244, 67, 54, 0.3)' : '0 2px 4px rgba(255, 152, 0, 0.3)',
+                                    boxShadow: project.status === 'نشط' ? '0 2px 4px rgba(76, 175, 80, 0.3)' :
+                                      project.status === 'منجز' ? '0 2px 4px rgba(33, 150, 243, 0.3)' :
+                                        project.status === 'متوقف' ? '0 2px 4px rgba(244, 67, 54, 0.3)' : '0 2px 4px rgba(255, 152, 0, 0.3)',
                                     border: 'none'
                                   }}
                                 />
@@ -1615,20 +1615,20 @@ const DashboardWithDatabase = () => {
                                   <Typography variant="caption">
                                     التقدم: {(project.progress || 0).toFixed(2)}%
                                   </Typography>
-                                  <LinearProgress 
-                                    variant="determinate" 
-                                    value={project.progress} 
-                                    sx={{ 
-                                      width: 60, 
-                                      height: 6, 
+                                  <LinearProgress
+                                    variant="determinate"
+                                    value={project.progress}
+                                    sx={{
+                                      width: 60,
+                                      height: 6,
                                       borderRadius: 3,
                                       bgcolor: theme.palette.action.hover,
                                       '& .MuiLinearProgress-bar': {
                                         borderRadius: 3,
-                                        bgcolor: project.progress > 70 ? '#4caf50' : 
-                                                project.progress > 40 ? '#ff9800' : '#f44336'
+                                        bgcolor: project.progress > 70 ? '#4caf50' :
+                                          project.progress > 40 ? '#ff9800' : '#f44336'
                                       }
-                                    }} 
+                                    }}
                                   />
                                 </Box>
                               </Box>
@@ -1637,7 +1637,7 @@ const DashboardWithDatabase = () => {
                           secondaryTypographyProps={{ component: 'div' }}
                         />
                       </ListItem>
-                      {index < (dashboardData.recentProjects?.length || 0) - 1 && 
+                      {index < (dashboardData.recentProjects?.length || 0) - 1 &&
                         <Divider sx={{ opacity: 0.3 }} />}
                     </React.Fragment>
                   ))}

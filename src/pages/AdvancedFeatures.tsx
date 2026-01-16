@@ -22,14 +22,22 @@ import {
   Alert,
   Skeleton,
   ButtonGroup,
-  CircularProgress
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Snackbar
 } from '@mui/material';
 import {
   Assignment as AssignmentIcon,
   AttachMoney as MoneyIcon,
   PictureAsPdf as PdfIcon,
   TableView as ExcelIcon,
-  Download as DownloadIcon
+  Download as DownloadIcon,
+  Edit as EditIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import Tooltip from '@mui/material/Tooltip';
@@ -110,7 +118,7 @@ const AdvancedFeatures: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Data states
   const [requests, setRequests] = useState([]); // الشركات
   const [subscriptions, setSubscriptions] = useState([]); // الاشتراكات
@@ -128,7 +136,35 @@ const AdvancedFeatures: React.FC = () => {
   const [selectedCompanyName, setSelectedCompanyName] = useState<string>('');
   const [companySearchLoading, setCompanySearchLoading] = useState(false);
   const [companyNoResults, setCompanyNoResults] = useState(false);
-  
+
+  // كاش لجميع الشركات - تحميل مرة واحدة
+  const [allCompaniesCache, setAllCompaniesCache] = useState<any[]>([]);
+  const [isLoadingAllCompanies, setIsLoadingAllCompanies] = useState(false);
+
+  // حالات نافذة تعديل المستخدم
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState<{
+    id: string;
+    userName: string;
+    IDNumber: string;
+    PhoneNumber: string;
+    job: string;
+    jobdiscrption: string;
+  }>({
+    id: '',
+    userName: '',
+    IDNumber: '',
+    PhoneNumber: '',
+    job: '',
+    jobdiscrption: '',
+  });
+  const [editLoading, setEditLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
+
   // تم إلغاء ميزة "البحثات الأخيرة"
 
   // Pagination
@@ -138,7 +174,7 @@ const AdvancedFeatures: React.FC = () => {
   const itemsPerPage = 10; // ثابت على 10 عناصر لكل صفحة
 
   // لا حاجة لتتبّع lastId هنا بعد إزالة نشاطات الدخول
-  
+
   // Filters
   const [projectFilter, setProjectFilter] = useState('');
 
@@ -165,11 +201,11 @@ const AdvancedFeatures: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       let paginatedData = [];
       let total = 0;
       let pagination = null;
-      
+
       // ربط كل endpoint بالـ API الحقيقي المناسب مع pagination
       switch (endpoint) {
         case 'requests':
@@ -179,7 +215,7 @@ const AdvancedFeatures: React.FC = () => {
             paginatedData = result.companies || [];
             pagination = result.pagination;
             total = pagination?.totalItems || 0;
-            
+
 
           } catch (error) {
             console.error('❌ Error fetching companies:', error);
@@ -216,7 +252,7 @@ const AdvancedFeatures: React.FC = () => {
           try {
             const numberParam = employeesLastIds[page - 1] || 0;
             const result = await fetchCompanyEmployees(String(selectedCompanyId), { lastId: numberParam, limit: itemsPerPage });
-            const all = (result.employees || []).sort((a: any, b: any) => (Number(a.id)||0) - (Number(b.id)||0));
+            const all = (result.employees || []).sort((a: any, b: any) => (Number(a.id) || 0) - (Number(b.id) || 0));
             const pageData = all.slice(0, itemsPerPage);
             paginatedData = pageData;
             const hasMore = all.length > itemsPerPage;
@@ -237,13 +273,13 @@ const AdvancedFeatures: React.FC = () => {
         default:
           throw new Error('نوع البيانات غير مدعوم');
       }
-      
+
       // تحديث إجمالي العناصر وعدد الصفحات
       setTotalItems(total);
       setTotalPages(Math.ceil(total / itemsPerPage));
-      
 
-      
+
+
       return paginatedData;
     } catch (err: any) {
       console.error('خطأ في جلب البيانات:', err);
@@ -551,7 +587,40 @@ const AdvancedFeatures: React.FC = () => {
   // حساب رقم الصف العام
   const getRowNumber = (index: number) => (page - 1) * itemsPerPage + index + 1;
 
-  // بحث الشركات لاختيار شركة للمستخدمين
+  // تحميل جميع الشركات مرة واحدة (محسّن)
+  const loadAllCompanies = async () => {
+    if (allCompaniesCache.length > 0 || isLoadingAllCompanies) return;
+
+    setIsLoadingAllCompanies(true);
+    try {
+      const allCompanies: any[] = [];
+      let currentPage = 1;
+      let hasMore = true;
+      const pageLimit = 50; // جلب 50 شركة في كل طلب لتسريع العملية
+
+      while (hasMore) {
+        const result = await fetchCompanies({ limit: pageLimit, page: currentPage });
+        const companies = result?.companies || [];
+        allCompanies.push(...companies);
+
+        // التحقق من وجود المزيد
+        hasMore = Boolean(result?.hasMore) && companies.length === pageLimit;
+        currentPage++;
+
+        // حماية من حلقات لا نهائية (حد أقصى 100 صفحة = 5000 شركة)
+        if (currentPage > 100) break;
+      }
+
+      console.log(`✅ Loaded ${allCompanies.length} companies into cache`);
+      setAllCompaniesCache(allCompanies);
+    } catch (e) {
+      console.error('❌ Error loading all companies:', e);
+    } finally {
+      setIsLoadingAllCompanies(false);
+    }
+  };
+
+  // بحث الشركات من الكاش (سريع جداً)
   const handleSearchCompanies = async () => {
     try {
       if (!companySearchTerm || companySearchTerm.trim().length < 2) {
@@ -559,25 +628,20 @@ const AdvancedFeatures: React.FC = () => {
         setCompanyNoResults(false);
         return;
       }
-      
-      // تم إلغاء تتبع البحثات الأخيرة
-      // بديل البحث: جلب صفحات من الشركات ثم فلترة محلياً
-      const term = companySearchTerm.trim().toLowerCase();
-      const pageLimit = 10;
-      const maxPages = 5; // جلب حتى 5 صفحات كحد أقصى (50 شركة)
-      const aggregated: any[] = [];
-      for (let p = 1; p <= maxPages; p++) {
-        const result = await fetchCompanies({ limit: pageLimit, page: p });
-        const companies = result?.companies || [];
-        aggregated.push(...companies);
-        if (!result?.hasMore || companies.length < pageLimit) break;
+
+      // إذا لم يتم تحميل الكاش بعد، نحمله الآن
+      if (allCompaniesCache.length === 0 && !isLoadingAllCompanies) {
+        await loadAllCompanies();
       }
 
-      const filtered = aggregated.filter((c: any) => {
+      // البحث من الكاش المحلي (فوري)
+      const term = companySearchTerm.trim().toLowerCase();
+      const filtered = allCompaniesCache.filter((c: any) => {
         const name = String(c?.name || '').toLowerCase();
         const city = String(c?.city || '').toLowerCase();
         const reg = String(c?.registrationNumber || '').toLowerCase();
-        return name.includes(term) || city.includes(term) || reg.includes(term);
+        const id = String(c?.id || '').toLowerCase();
+        return name.includes(term) || city.includes(term) || reg.includes(term) || id.includes(term);
       }).map((c: any) => ({
         id: c.id,
         name: c.name,
@@ -587,12 +651,10 @@ const AdvancedFeatures: React.FC = () => {
       }));
 
       setCompanySearchResults(filtered);
-      // تحديث companyNoResults بناءً على وجود النتائج
       setCompanyNoResults(filtered.length === 0);
     } catch (e) {
       console.error('❌ Error searching companies:', e);
       setCompanySearchResults([]);
-      // لا نعرض رسالة "لا توجد نتائج" في حالة الخطأ
       setCompanyNoResults(false);
     }
   };
@@ -628,7 +690,7 @@ const AdvancedFeatures: React.FC = () => {
   // معالجة تغيير نص البحث
   const handleSearchTermChange = (value: string) => {
     setCompanySearchTerm(value);
-    
+
     // إذا كان النص فارغاً، نمسح النتائج والبيانات المعروضة
     if (!value.trim()) {
       setCompanySearchResults([]);
@@ -653,6 +715,98 @@ const AdvancedFeatures: React.FC = () => {
     setPage(1);
   };
 
+  // دوال نافذة تعديل المستخدم
+  const handleOpenEditDialog = (employee: any) => {
+    setEditFormData({
+      id: String(employee.id || ''),
+      userName: employee.userName || '',
+      IDNumber: employee.IDNumber || '',
+      PhoneNumber: employee.PhoneNumber || '',
+      job: employee.job || '',
+      jobdiscrption: employee.jobdiscrption || '',
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleCloseEditDialog = () => {
+    setEditDialogOpen(false);
+    setEditFormData({
+      id: '',
+      userName: '',
+      IDNumber: '',
+      PhoneNumber: '',
+      job: '',
+      jobdiscrption: '',
+    });
+  };
+
+  const handleEditFormChange = (field: string, value: string) => {
+    setEditFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editFormData.userName.trim()) {
+      setSnackbar({ open: true, message: 'اسم المستخدم مطلوب', severity: 'error' });
+      return;
+    }
+    if (!editFormData.PhoneNumber.trim()) {
+      setSnackbar({ open: true, message: 'رقم الهاتف مطلوب', severity: 'error' });
+      return;
+    }
+
+    try {
+      setEditLoading(true);
+
+      const requestBody = {
+        id: editFormData.id,
+        userName: editFormData.userName,
+        IDNumber: editFormData.IDNumber,
+        PhoneNumber: editFormData.PhoneNumber,
+        job: editFormData.job,
+        jobdiscrption: editFormData.jobdiscrption,
+        IDCompany: selectedCompanyId,
+      };
+
+      console.log('📤 Sending edit request:', requestBody);
+
+      const response = await apiClient.put('/user/v2/updat', requestBody);
+
+      console.log('📥 Edit response:', response.data);
+
+      if (response.data?.success === true || response.data?.success === 'تمت العملية بنجاح') {
+        setSnackbar({ open: true, message: 'تم تعديل بيانات المستخدم بنجاح', severity: 'success' });
+        handleCloseEditDialog();
+        // إعادة تحميل بيانات الموظفين
+        loadData(2);
+      } else {
+        const errorMessage = response.data?.message || response.data?.errors
+          ? Object.values(response.data.errors || {}).join(', ')
+          : 'فشل في تعديل البيانات';
+        setSnackbar({ open: true, message: errorMessage, severity: 'error' });
+      }
+    } catch (error: any) {
+      console.error('❌ Error updating user:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'حدث خطأ أثناء التعديل';
+      setSnackbar({ open: true, message: errorMessage, severity: 'error' });
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar((prev) => ({ ...prev, open: false }));
+  };
+
+  // تحميل جميع الشركات عند الدخول لتبويب مستخدمين الشركة
+  useEffect(() => {
+    if (activeTab === 2 && allCompaniesCache.length === 0 && !isLoadingAllCompanies) {
+      loadAllCompanies();
+    }
+  }, [activeTab]);
+
   // تحسين البحث: تنفيذ تلقائي مع إكمال تلقائي (debounce)
   useEffect(() => {
     if (activeTab !== 2) return;
@@ -669,14 +823,13 @@ const AdvancedFeatures: React.FC = () => {
       } catch (e) {
         console.error('❌ Error searching companies:', e);
         setCompanySearchResults([]);
-        // لا نعرض رسالة "لا توجد نتائج" في حالة الخطأ
         setCompanyNoResults(false);
       } finally {
         setCompanySearchLoading(false);
       }
-    }, 500); // زيادة debounce time لتحسين الأداء
+    }, 200); // تقليل debounce time لأن البحث الآن محلي وسريع
     return () => clearTimeout(t);
-  }, [companySearchTerm, activeTab]);
+  }, [companySearchTerm, activeTab, allCompaniesCache]);
 
   // بحث الموظفين بالاسم (debounce) مع جلب متدرج
   useEffect(() => {
@@ -763,7 +916,7 @@ const AdvancedFeatures: React.FC = () => {
       // Create workbook and worksheet
       const ws = XLSX.utils.aoa_to_sheet([headers, ...worksheetData]);
       const wb = XLSX.utils.book_new();
-      
+
       // Set column widths (auto width fallback)
       try {
         const colWidths = headers.map((h, i) => {
@@ -780,12 +933,12 @@ const AdvancedFeatures: React.FC = () => {
       } catch {
         ws['!cols'] = headers.map(() => ({ wch: 15 }));
       }
-      
+
       XLSX.utils.book_append_sheet(wb, ws, getTabName());
-      
+
       // Generate filename
       const fileName = `${getTabName()}_${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}.xlsx`;
-      
+
       // Save file
       // Ensure Excel opens Arabic text correctly by using bookType: 'xlsx'
       XLSX.writeFile(wb, fileName, { bookType: 'xlsx' } as any);
@@ -821,8 +974,8 @@ const AdvancedFeatures: React.FC = () => {
         if ((doc as any).setR2L) {
           (doc as any).setR2L(true);
         }
-      } catch {}
-      
+      } catch { }
+
       // Header styling
       const title = getTabName();
       const dateStr = new Date().toLocaleDateString('en-GB');
@@ -834,7 +987,7 @@ const AdvancedFeatures: React.FC = () => {
       doc.setFontSize(10);
       doc.text(`التاريخ: ${dateStr}`, doc.internal.pageSize.getWidth() - 10, 12, { align: 'right' });
       doc.setTextColor(0);
-      
+
       // Try rendering the visible table directly as HTML to preserve Arabic shaping
       const el = document.getElementById('pdf-export');
       if (el && (doc as any).html) {
@@ -1022,10 +1175,10 @@ const AdvancedFeatures: React.FC = () => {
               <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{safeText(company.country)}</TableCell>
               <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{safeText(company.registrationNumber)}</TableCell>
               <TableCell>
-                <Chip 
-                  label={company.branchesAllowed || 0} 
-                  color="primary" 
-                  size="small" 
+                <Chip
+                  label={company.branchesAllowed || 0}
+                  color="primary"
+                  size="small"
                 />
               </TableCell>
               <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{safeText(formatDate(company.subscriptionStart))}</TableCell>
@@ -1085,9 +1238,9 @@ const AdvancedFeatures: React.FC = () => {
           الميزات المتقدمة
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-          <Chip 
+          <Chip
             label={loading ? 'جاري التحميل...' : `إجمالي السجلات: ${totalItems}`}
-            color="primary" 
+            color="primary"
             variant="outlined"
             sx={{ fontSize: '0.95rem', fontWeight: 'bold' }}
             icon={loading ? <CircularProgress size={16} /> : undefined}
@@ -1122,42 +1275,42 @@ const AdvancedFeatures: React.FC = () => {
           </Tooltip>
         </Box>
       </Box>
-      
+
       <Card sx={{ mb: 3, display: 'none' }}>
         <CardContent>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={12}>
-                <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                  <Tooltip title="تصدير إلى Excel" arrow>
-                    <span>
-                      <Button
-                        onClick={exportToExcel}
-                        variant="outlined"
-                        color="success"
-                        startIcon={<ExcelIcon />}
-                        disabled={getCurrentTabData().length === 0 || loading}
-                        sx={{ borderRadius: 2, textTransform: 'none' }}
-                      >
-                        تصدير Excel
-                      </Button>
-                    </span>
-                  </Tooltip>
-                  <Tooltip title="تصدير إلى PDF" arrow>
-                    <span>
-                      <Button
-                        onClick={exportToPDF}
-                        variant="outlined"
-                        color="error"
-                        startIcon={<PdfIcon />}
-                        disabled={getCurrentTabData().length === 0 || loading}
-                        sx={{ borderRadius: 2, textTransform: 'none' }}
-                      >
-                        تصدير PDF
-                      </Button>
-                    </span>
-                  </Tooltip>
-                </Box>
-              </Grid>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={12}>
+              <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                <Tooltip title="تصدير إلى Excel" arrow>
+                  <span>
+                    <Button
+                      onClick={exportToExcel}
+                      variant="outlined"
+                      color="success"
+                      startIcon={<ExcelIcon />}
+                      disabled={getCurrentTabData().length === 0 || loading}
+                      sx={{ borderRadius: 2, textTransform: 'none' }}
+                    >
+                      تصدير Excel
+                    </Button>
+                  </span>
+                </Tooltip>
+                <Tooltip title="تصدير إلى PDF" arrow>
+                  <span>
+                    <Button
+                      onClick={exportToPDF}
+                      variant="outlined"
+                      color="error"
+                      startIcon={<PdfIcon />}
+                      disabled={getCurrentTabData().length === 0 || loading}
+                      sx={{ borderRadius: 2, textTransform: 'none' }}
+                    >
+                      تصدير PDF
+                    </Button>
+                  </span>
+                </Tooltip>
+              </Box>
+            </Grid>
           </Grid>
         </CardContent>
       </Card>
@@ -1179,11 +1332,11 @@ const AdvancedFeatures: React.FC = () => {
       <TabPanel value={activeTab} index={0}>
         {loading ? <Skeleton variant="rectangular" height={400} /> : renderRequests()}
       </TabPanel>
-      
+
       <TabPanel value={activeTab} index={1}>
         {loading ? <Skeleton variant="rectangular" height={400} /> : renderRevenue()}
       </TabPanel>
-      
+
       <TabPanel value={activeTab} index={2}>
         <Card sx={{ mb: 2 }}>
           <CardContent>
@@ -1196,7 +1349,7 @@ const AdvancedFeatures: React.FC = () => {
                     loading={companySearchLoading}
                     getOptionLabel={(option: any) => `${option.name || ''}${option.city ? ` - ${option.city}` : ''}${option.country ? ` (${option.country})` : ''}`}
                     value={companySearchResults.find((o) => String(o.id) === String(selectedCompanyId)) || null}
-                    onChange={(e, value) => { 
+                    onChange={(e, value) => {
                       if (value) {
                         handleSelectCompany(value);
                       } else {
@@ -1264,10 +1417,10 @@ const AdvancedFeatures: React.FC = () => {
                       );
                     }}
                   />
-                  
+
                 </Box>
               </Grid>
-              
+
               {/* عرض معلومات الشركة المحددة */}
               <Grid item xs={12} md={4}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -1348,6 +1501,7 @@ const AdvancedFeatures: React.FC = () => {
                   <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>القسم</TableCell>
                   <TableCell>الهاتف</TableCell>
                   <TableCell>الحالة</TableCell>
+                  <TableCell>الإجراءات</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1360,6 +1514,17 @@ const AdvancedFeatures: React.FC = () => {
                     <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{emp.jobHOM}</TableCell>
                     <TableCell>{emp.PhoneNumber}</TableCell>
                     <TableCell>{getStatusChip(String(emp.Activation))}</TableCell>
+                    <TableCell>
+                      <Tooltip title="تعديل بيانات المستخدم" arrow>
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={() => handleOpenEditDialog(emp)}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1371,6 +1536,96 @@ const AdvancedFeatures: React.FC = () => {
       </TabPanel>
 
       {renderAdvancedPaginationControls()}
+
+      {/* نافذة تعديل بيانات المستخدم */}
+      <Dialog open={editDialogOpen} onClose={handleCloseEditDialog} maxWidth="sm" fullWidth dir="rtl">
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6">تعديل بيانات المستخدم</Typography>
+          <IconButton onClick={handleCloseEditDialog} size="small">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Grid container spacing={2} sx={{ pt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                label="اسم المستخدم"
+                fullWidth
+                required
+                value={editFormData.userName}
+                onChange={(e) => handleEditFormChange('userName', e.target.value)}
+                disabled={editLoading}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="رقم الهاتف"
+                fullWidth
+                required
+                value={editFormData.PhoneNumber}
+                onChange={(e) => handleEditFormChange('PhoneNumber', e.target.value)}
+                disabled={editLoading}
+                placeholder="5XXXXXXXX"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="رقم الهوية / الإقامة"
+                fullWidth
+                value={editFormData.IDNumber}
+                onChange={(e) => handleEditFormChange('IDNumber', e.target.value)}
+                disabled={editLoading}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="المسمى الوظيفي"
+                fullWidth
+                value={editFormData.job}
+                onChange={(e) => handleEditFormChange('job', e.target.value)}
+                disabled={editLoading}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="وصف الوظيفة"
+                fullWidth
+                multiline
+                rows={3}
+                value={editFormData.jobdiscrption}
+                onChange={(e) => handleEditFormChange('jobdiscrption', e.target.value)}
+                disabled={editLoading}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button onClick={handleCloseEditDialog} disabled={editLoading} variant="outlined" color="inherit">
+            إلغاء
+          </Button>
+          <Button
+            onClick={handleSaveEdit}
+            disabled={editLoading}
+            variant="contained"
+            color="primary"
+            startIcon={editLoading ? <CircularProgress size={20} color="inherit" /> : null}
+          >
+            {editLoading ? 'جاري الحفظ...' : 'حفظ التعديلات'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* رسائل الإشعارات */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={5000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

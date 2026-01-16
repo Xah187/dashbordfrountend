@@ -67,8 +67,8 @@ interface ErrorBoundaryState {
   error?: Error;
 }
 
-class ErrorBoundary extends React.Component<{children: React.ReactNode}, ErrorBoundaryState> {
-  constructor(props: {children: React.ReactNode}) {
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
   }
@@ -79,7 +79,7 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, ErrorBo
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Error caught by boundary:', error, errorInfo);
-    
+
     // معالجة خاصة لـ ChunkLoadError
     if (error.message && error.message.includes('Loading chunk')) {
       console.log('ChunkLoadError detected, reloading page...');
@@ -92,25 +92,25 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, ErrorBo
   render() {
     if (this.state.hasError) {
       return (
-        <Box sx={{ 
-          display: 'flex', 
-          flexDirection: 'column', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
+        <Box sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
           height: '100vh',
           gap: 2,
           p: 3
         }}>
           <Typography variant="h5">حدث خطأ في التطبيق</Typography>
           <Typography variant="body1" color="text.secondary">
-            {this.state.error?.message.includes('Loading chunk') 
-              ? 'جاري إعادة تحميل الصفحة...' 
+            {this.state.error?.message.includes('Loading chunk')
+              ? 'جاري إعادة تحميل الصفحة...'
               : 'يرجى إعادة تحميل الصفحة'
             }
           </Typography>
           {!this.state.error?.message.includes('Loading chunk') && (
-            <Button 
-              variant="contained" 
+            <Button
+              variant="contained"
               onClick={() => window.location.reload()}
             >
               إعادة التحميل
@@ -125,21 +125,25 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, ErrorBo
 }
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // التحقق من وجود جلسة مستخدم سابقة عند بدء التطبيق
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    const storedUser = localStorage.getItem('user');
+    return storedUser ? true : false;
+  });
   const { darkMode, themeSettings, getHighContrastValues, getPrimaryColorValue, getFontSizeMultiplier, getBorderRadiusValue } = useTheme();
-  
+
   // استرجاع قيم التباين العالي
   const highContrastValues = getHighContrastValues();
   const isHighContrast = themeSettings?.highContrast || false;
-  
+
   // استرجاع قيم اللون الرئيسي وحجم الخط
   const primaryColor = getPrimaryColorValue(themeSettings?.primaryColor || 'brandBlue');
   const fontSizeMultiplier = getFontSizeMultiplier(themeSettings?.fontSize || 'medium');
-  
+
   // استرجاع قيم الزوايا والحواف
   const borderRadius = getBorderRadiusValue(themeSettings?.borderRadius || 'medium');
   const roundedCorners = themeSettings?.roundedCorners !== undefined ? themeSettings.roundedCorners : true;
-  
+
   // طباعة الإعدادات المستخدمة للتأكد من أنها تطبق بشكل صحيح
   useEffect(() => {
     console.log('تم تحديث إعدادات المظهر في App.tsx:', {
@@ -152,7 +156,7 @@ function App() {
       themeSettings
     });
   }, [darkMode, primaryColor, fontSizeMultiplier, isHighContrast, borderRadius, roundedCorners, themeSettings]);
-  
+
   // Custom theme inspired by the main app with dark mode support
   const theme = useMemo(() => createTheme({
     direction: 'rtl',
@@ -728,12 +732,12 @@ function App() {
                 <Routes>
                   <Route path="/" element={<DashboardLayout />}>
                     <Route index element={<Navigate to="/dashboard-with-db" replace />} />
-                    
+
                     <Route path="users" element={<Suspense fallback={<LoadingScreen />}><Users /></Suspense>} />
                     <Route path="settings" element={<Suspense fallback={<LoadingScreen />}><Settings /></Suspense>} />
-                                <Route path="subscriptions" element={<Suspense fallback={<LoadingScreen />}><Subscriptions /></Suspense>} />
-            <Route path="login-activity" element={<Suspense fallback={<LoadingScreen />}><LoginActivity /></Suspense>} />
-            <Route path="advanced-analytics" element={<Suspense fallback={<LoadingScreen />}><AdvancedAnalytics /></Suspense>} />
+                    <Route path="subscriptions" element={<Suspense fallback={<LoadingScreen />}><Subscriptions /></Suspense>} />
+                    <Route path="login-activity" element={<Suspense fallback={<LoadingScreen />}><LoginActivity /></Suspense>} />
+                    <Route path="advanced-analytics" element={<Suspense fallback={<LoadingScreen />}><AdvancedAnalytics /></Suspense>} />
                     <Route path="map-view" element={<Suspense fallback={<LoadingScreen />}><MapView /></Suspense>} />
                     <Route path="time-cost-tracking" element={<Suspense fallback={<LoadingScreen />}><TimeAndCostTracking /></Suspense>} />
                     <Route path="api-test" element={<Suspense fallback={<LoadingScreen />}><ApiTest /></Suspense>} />
@@ -745,14 +749,14 @@ function App() {
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </UserProvider>
-             ) : (
-               <Routes>
-                 <Route path="/" element={<Navigate to="/login" replace />} />
-                 <Route path="/login" element={<Suspense fallback={<LoadingScreen />}><AuthLayout><Login /></AuthLayout></Suspense>} />
-                 <Route path="*" element={<Navigate to="/login" replace />} />
-                 <Route path="/not-found" element={<Suspense fallback={<LoadingScreen />}><NotFound /></Suspense>} />
-               </Routes>
-             )}
+            ) : (
+              <Routes>
+                <Route path="/" element={<Navigate to="/login" replace />} />
+                <Route path="/login" element={<Suspense fallback={<LoadingScreen />}><AuthLayout><Login /></AuthLayout></Suspense>} />
+                <Route path="*" element={<Navigate to="/login" replace />} />
+                <Route path="/not-found" element={<Suspense fallback={<LoadingScreen />}><NotFound /></Suspense>} />
+              </Routes>
+            )}
           </AuthContext.Provider>
         </ThemeProvider>
       </CacheProvider>

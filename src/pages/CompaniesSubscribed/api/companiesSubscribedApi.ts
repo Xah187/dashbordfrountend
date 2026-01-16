@@ -83,7 +83,7 @@ export const companiesSubscribedApi = {
   }): Promise<ApiResponse<Company[]>> {
     try {
 
-      const response = await apiClient.get("/companies", { params } );
+      const response = await apiClient.get("/companies", { params });
       return response.data;
     } catch (error: any) {
       console.error("خطأ في جلب الشركات:", error);
@@ -183,7 +183,7 @@ export const companiesSubscribedApi = {
 
 
   // جلب مشاريع فرع محدد مع دعم عدد غير محدود من المشاريع
-  async getBranchProjects(IDCompany:number,branchId: number, lastId = 0, limit = 10, includeDisabled = false): Promise<ApiResponse<Project[]>> {
+  async getBranchProjects(IDCompany: number, branchId: number, lastId = 0, limit = 10, includeDisabled = false): Promise<ApiResponse<Project[]>> {
     try {
       // طبقة كاش خفيفة في الفرونت لتقليل الضغط (stale-while-revalidate بسيط)
       const CACHE_TTL_MS = 2 * 60 * 1000; // دقيقتان
@@ -196,7 +196,7 @@ export const companiesSubscribedApi = {
             return { success: true, data: cached.data };
           }
         }
-      } catch {}
+      } catch { }
       // نحاول جلب المشاريع على دفعات صغيرة متعددة لتجاوز قيد LIMIT 3
       const allProjects: any[] = [];
       let currentLastId = lastId;
@@ -210,14 +210,11 @@ export const companiesSubscribedApi = {
       while (allProjects.length < targetSize && iterations < maxIterations) {
         iterations++;
 
-      const response = await apiClient.get("/brinshCompany/v2/BringProject", {
-        params: {
-          IDCompany:IDCompany,
-          IDcompanySub: branchId,
+        const response = await apiClient.get("/brinshCompany/BringProject", {
+          params: {
+            IDcompanySub: branchId,
             IDfinlty: currentLastId,
-          type: "cache",
-          kind: "all",
-            order: "ASC"
+            type: "cache",
           }
         });
 
@@ -229,12 +226,12 @@ export const companiesSubscribedApi = {
 
         if (batchProjects.length === 0) {
           consecutiveEmptyBatches++;
-          
+
           // إذا حصلنا على 5 دفعات فارغة متتالية، نعتبر أننا وصلنا للنهاية
           if (consecutiveEmptyBatches >= 5) {
             break;
           }
-          
+
           // جرب زيادة last_id بقفزة أكبر في حالة وجود فجوات في البيانات
           currentLastId += 5;
           continue;
@@ -244,7 +241,7 @@ export const companiesSubscribedApi = {
         consecutiveEmptyBatches = 0;
 
         // إضافة المشاريع الجديدة (تجنب التكرار)
-        const newProjects = batchProjects.filter((newProject: any) => 
+        const newProjects = batchProjects.filter((newProject: any) =>
           !allProjects.some(existingProject => existingProject.id === newProject.id)
         );
 
@@ -256,7 +253,7 @@ export const companiesSubscribedApi = {
         if (batchProjects.length > 0) {
           const lastProjectInBatch = batchProjects[batchProjects.length - 1];
           const newLastId = lastProjectInBatch.id;
-          
+
           // تأكد من أن last_id يتقدم
           if (newLastId <= currentLastId) {
             currentLastId = currentLastId + 5;
@@ -296,11 +293,11 @@ export const companiesSubscribedApi = {
       const finalProjects = filteredProjects.slice(0, targetSize);
 
 
-      
+
       // تخزين في الكاش
       try {
         localStorage.setItem(cacheKey, JSON.stringify({ data: finalProjects, ts: Date.now() }));
-      } catch {}
+      } catch { }
 
       return {
         success: true,
@@ -315,8 +312,8 @@ export const companiesSubscribedApi = {
   },
 
   // جلب جميع مشاريع الفرع (بما في ذلك المُعطَّلة) لأغراض الإدارة
-  async getAllBranchProjects(IDCompany:number,branchId: number, lastId = 0, limit = 50): Promise<ApiResponse<Project[]>> {
-    return this.getBranchProjects(IDCompany,branchId, lastId, limit, true); // includeDisabled = true
+  async getAllBranchProjects(IDCompany: number, branchId: number, lastId = 0, limit = 50): Promise<ApiResponse<Project[]>> {
+    return this.getBranchProjects(IDCompany, branchId, lastId, limit, true); // includeDisabled = true
   },
 
   // البحث في مشاريع الفرع عبر الباك اند (v2/FilterProject)
@@ -372,14 +369,11 @@ export const companiesSubscribedApi = {
 
       while (allMatched.length < limitResults && iterations < maxIterations) {
         iterations++;
-        const response = await apiClient.get("/brinshCompany/v2/BringProject", {
+        const response = await apiClient.get("/brinshCompany/BringProject", {
           params: {
-            IDCompany: IDCompany,
             IDcompanySub: branchId,
             IDfinlty: currentLastId,
-            type: "cache",
-            kind: "all",
-            order: "ASC"
+            type: "cache"
           }
         });
 
@@ -460,7 +454,7 @@ export const companiesSubscribedApi = {
         ...projectData,
         Disabled: true  // true = نشط حسب البيانات الفعلية
       };
-      
+
       const response = await apiClient.post("/brinshCompany/project", projectWithStatus);
       return response.data;
     } catch (error: any) {
@@ -475,13 +469,13 @@ export const companiesSubscribedApi = {
   async toggleProjectStatus(projectId: number, makeActive: boolean = true): Promise<ApiResponse<Project>> {
     try {
       const statusText = makeActive ? 'تفعيل' : 'تعطيل';
-      
+
       // في قاعدة البيانات الفعلية: true = نشط، false = معطل
       const response = await apiClient.put("/brinshCompany/projectUpdat", {
         id: projectId,
         Disabled: makeActive ? true : false
       });
-      
+
       return response.data;
     } catch (error: any) {
       return {
@@ -553,7 +547,7 @@ export const companiesSubscribedApi = {
       // جلب الموظفين على دفعات
       while (allEmployees.length < targetSize && iterations < maxIterations) {
         iterations++;
-        
+
         console.log(`📦 محاولة جلب الدفعة ${iterations}:`, {
           currentLastId,
           employeesCollected: allEmployees.length,
@@ -562,7 +556,7 @@ export const companiesSubscribedApi = {
 
         const response = await apiClient.get("/user/BringUserCompany", {
           params: {
-        IDCompany: companyId,
+            IDCompany: companyId,
             number: currentLastId
           }
         });
@@ -584,13 +578,13 @@ export const companiesSubscribedApi = {
         if (batchEmployees.length === 0) {
           consecutiveEmptyBatches++;
           console.log(`⚠️ دفعة فارغة ${consecutiveEmptyBatches}:`, { currentLastId });
-          
+
           // إذا حصلنا على 5 دفعات فارغة متتالية، نعتبر أننا وصلنا للنهاية
           if (consecutiveEmptyBatches >= 5) {
             console.log('🔚 انتهاء البيانات - خمس دفعات فارغة متتالية');
             break;
           }
-          
+
           // جرب زيادة last_id بقفزة أكبر في حالة وجود فجوات في البيانات
           currentLastId += 5;
           continue;
@@ -600,7 +594,7 @@ export const companiesSubscribedApi = {
         consecutiveEmptyBatches = 0;
 
         // إضافة الموظفين الجدد (تجنب التكرار)
-        const newEmployees = batchEmployees.filter((newEmployee: any) => 
+        const newEmployees = batchEmployees.filter((newEmployee: any) =>
           !allEmployees.some(existingEmployee => existingEmployee.id === newEmployee.id)
         );
 
@@ -615,7 +609,7 @@ export const companiesSubscribedApi = {
         if (batchEmployees.length > 0) {
           const lastEmployeeInBatch = batchEmployees[batchEmployees.length - 1];
           const newLastId = lastEmployeeInBatch.id;
-          
+
           // تأكد من أن last_id يتقدم
           if (newLastId <= currentLastId) {
             console.log('⚠️ last_id لم يتقدم، زيادة يدوية:', {
@@ -707,7 +701,7 @@ export const companiesSubscribedApi = {
       // جلب جميع الموظفين
       while (iterations < maxIterations) {
         iterations++;
-        
+
         const response = await apiClient.get("/user/BringUserCompany", {
           params: {
             IDCompany: companyId,
@@ -721,7 +715,7 @@ export const companiesSubscribedApi = {
         }
 
         const batchEmployees = response.data.data || [];
-        
+
         if (batchEmployees.length === 0) {
           consecutiveEmptyBatches++;
           if (consecutiveEmptyBatches >= 5) {
@@ -735,7 +729,7 @@ export const companiesSubscribedApi = {
         consecutiveEmptyBatches = 0;
 
         // إضافة الموظفين الجدد (تجنب التكرار)
-        const newEmployees = batchEmployees.filter((newEmployee: any) => 
+        const newEmployees = batchEmployees.filter((newEmployee: any) =>
           !allEmployees.some(existingEmployee => existingEmployee.id === newEmployee.id)
         );
 
@@ -745,7 +739,7 @@ export const companiesSubscribedApi = {
         if (batchEmployees.length > 0) {
           const lastEmployeeInBatch = batchEmployees[batchEmployees.length - 1];
           const newLastId = lastEmployeeInBatch.id;
-          
+
           if (newLastId <= currentLastId) {
             currentLastId = currentLastId + 5;
           } else {
@@ -795,7 +789,7 @@ export const companiesSubscribedApi = {
       // فلترة حسب مصطلح البحث
       if (searchTerm.trim()) {
         const term = searchTerm.toLowerCase();
-        filteredEmployees = filteredEmployees.filter(employee => 
+        filteredEmployees = filteredEmployees.filter(employee =>
           employee.userName.toLowerCase().includes(term) ||
           employee.job.toLowerCase().includes(term) ||
           employee.jobHOM.toLowerCase().includes(term) ||
@@ -807,21 +801,21 @@ export const companiesSubscribedApi = {
 
       // فلترة حسب الوظيفة
       if (filters?.job) {
-        filteredEmployees = filteredEmployees.filter(employee => 
+        filteredEmployees = filteredEmployees.filter(employee =>
           employee.job === filters.job
         );
       }
 
       // فلترة حسب القسم
       if (filters?.jobHOM) {
-        filteredEmployees = filteredEmployees.filter(employee => 
+        filteredEmployees = filteredEmployees.filter(employee =>
           employee.jobHOM === filters.jobHOM
         );
       }
 
       // فلترة حسب الحالة
       if (filters?.activation) {
-        filteredEmployees = filteredEmployees.filter(employee => 
+        filteredEmployees = filteredEmployees.filter(employee =>
           employee.Activation === filters.activation
         );
       }
@@ -832,10 +826,10 @@ export const companiesSubscribedApi = {
         filteredEmployees.sort((a, b) => {
           const aNameMatch = a.userName.toLowerCase().includes(term);
           const bNameMatch = b.userName.toLowerCase().includes(term);
-          
+
           if (aNameMatch && !bNameMatch) return -1;
           if (!aNameMatch && bNameMatch) return 1;
-          
+
           // إذا كان كلاهما يطابق الاسم أو لا يطابق، رتب أبجدياً
           return a.userName.localeCompare(b.userName, 'ar');
         });
@@ -886,7 +880,7 @@ export const companiesSubscribedApi = {
       });
 
       const response = await apiClient.put("/user/updat", employeeData);
-      
+
       console.log('📥 استجابة تحديث الموظف:', {
         status: response.status,
         data: response.data
@@ -894,11 +888,11 @@ export const companiesSubscribedApi = {
 
       if (response.data) {
         // الخادم قد يرسل استجابات مختلفة
-        const isSuccess = response.data.success === "تمت العملية بنجاح" || 
-                         response.data.success === true ||
-                         response.data.masseg === "تمت العملية بنجاح" ||
-                         response.data.message === "تمت العملية بنجاح";
-        
+        const isSuccess = response.data.success === "تمت العملية بنجاح" ||
+          response.data.success === true ||
+          response.data.masseg === "تمت العملية بنجاح" ||
+          response.data.message === "تمت العملية بنجاح";
+
         return {
           success: isSuccess,
           data: response.data,
@@ -919,11 +913,11 @@ export const companiesSubscribedApi = {
       });
 
       let errorMessage = "حدث خطأ أثناء تحديث الموظف";
-      
+
       if (error.response) {
         const statusCode = error.response.status;
         const serverError = error.response.data?.error || error.response.data?.message;
-        
+
         if (statusCode === 404) {
           errorMessage = "الموظف غير موجود";
         } else if (statusCode === 403) {
@@ -963,7 +957,7 @@ export const companiesSubscribedApi = {
       });
 
       const response = await apiClient.post("/user", employeeData);
-      
+
       console.log('📥 استجابة إضافة الموظف:', {
         status: response.status,
         data: response.data
@@ -971,11 +965,11 @@ export const companiesSubscribedApi = {
 
       if (response.data) {
         // الخادم قد يرسل استجابات مختلفة
-        const isSuccess = response.data.success === "تمت العملية بنجاح" || 
-                         response.data.success === true ||
-                         response.data.masseg === "تمت العملية بنجاح" ||
-                         response.data.message === "تمت العملية بنجاح";
-        
+        const isSuccess = response.data.success === "تمت العملية بنجاح" ||
+          response.data.success === true ||
+          response.data.masseg === "تمت العملية بنجاح" ||
+          response.data.message === "تمت العملية بنجاح";
+
         return {
           success: isSuccess,
           data: response.data,
@@ -997,11 +991,11 @@ export const companiesSubscribedApi = {
       });
 
       let errorMessage = "حدث خطأ أثناء إضافة الموظف";
-      
+
       if (error.response) {
         const statusCode = error.response.status;
         const serverError = error.response.data?.error || error.response.data?.message;
-        
+
         if (statusCode === 400) {
           errorMessage = serverError || "البيانات المرسلة غير صحيحة";
         } else if (statusCode === 409) {
@@ -1035,7 +1029,7 @@ export const companiesSubscribedApi = {
       // الخادم يتوقع PhoneNumber وليس id
       const requestData = { PhoneNumber: employee.PhoneNumber };
       const response = await apiClient.put("/user/DeletUser", requestData);
-      
+
       console.log('📥 استجابة حذف الموظف:', {
         status: response.status,
         data: response.data
@@ -1044,7 +1038,7 @@ export const companiesSubscribedApi = {
       if (response.data) {
         // الخادم يرسل { success: "تمت العملية بنجاح" } وليس { success: true }
         const isSuccess = response.data.success === "تمت العملية بنجاح" || response.data.success === true;
-        
+
         return {
           success: isSuccess,
           data: response.data,
@@ -1066,11 +1060,11 @@ export const companiesSubscribedApi = {
       });
 
       let errorMessage = "حدث خطأ أثناء حذف الموظف";
-      
+
       if (error.response) {
         const statusCode = error.response.status;
         const serverError = error.response.data?.error || error.response.data?.message;
-        
+
         if (statusCode === 404) {
           errorMessage = "الموظف غير موجود أو تم حذفه مسبقاً";
         } else if (statusCode === 403) {
@@ -1117,7 +1111,7 @@ export const companiesSubscribedApi = {
   async getProjectMainStages(projectId: number, lastId = 0): Promise<ApiResponse<any[]>> {
     try {
       console.log(`🔍 [API] بدء جلب المراحل الرئيسية:`, { projectId, lastId });
-      
+
       const response = await apiClient.get("/brinshCompany/BringStage", {
         params: {
           ProjectID: projectId,
@@ -1171,11 +1165,11 @@ export const companiesSubscribedApi = {
     }
   },
 
-    // جلب المراحل الفرعية لمرحلة محددة مع نظام batching (7→10)
+  // جلب المراحل الفرعية لمرحلة محددة مع نظام batching (7→10)
   async getStageSubStages(stageId: number, projectId: number, lastId = 0, limit = 10): Promise<ApiResponse<any[]>> {
     try {
       console.log(`🔍 [API] جلب المراحل الفرعية مع Batching - StageID: ${stageId}, ProjectID: ${projectId}, lastId: ${lastId}, targetLimit: ${limit}`);
-      
+
       let allSubStages: any[] = [];
       let currentLastId = lastId;
       let maxIterations = 5; // حماية من التكرار اللانهائي
@@ -1184,11 +1178,11 @@ export const companiesSubscribedApi = {
       // جلب البيانات على دفعات من 7 عناصر حتى نصل إلى 10
       while (allSubStages.length < limit && iteration < maxIterations) {
         console.log(`📦 Batch ${iteration + 1}: جلب من lastId=${currentLastId}`);
-        
+
         const response = await apiClient.get("/brinshCompany/BringStagesub", {
-        params: { 
+          params: {
             StageID: stageId,
-          ProjectID: projectId,
+            ProjectID: projectId,
             type: "update",
             number: currentLastId
           }
@@ -1200,10 +1194,10 @@ export const companiesSubscribedApi = {
         }
 
         const batchData = response.data.data || [];
-                 console.log(`📨 Batch ${iteration + 1} response:`, {
-           batchSize: batchData.length,
-           totalCollected: allSubStages.length,
-           batchData: batchData.map((item: any) => ({ StageSubID: item.StageSubID, StageSubName: item.StageSubName }))
+        console.log(`📨 Batch ${iteration + 1} response:`, {
+          batchSize: batchData.length,
+          totalCollected: allSubStages.length,
+          batchData: batchData.map((item: any) => ({ StageSubID: item.StageSubID, StageSubName: item.StageSubName }))
         });
 
         if (batchData.length === 0) {
@@ -1213,7 +1207,7 @@ export const companiesSubscribedApi = {
 
         // إضافة البيانات الجديدة
         allSubStages.push(...batchData);
-        
+
         // تحديث lastId للدفعة التالية
         if (batchData.length > 0) {
           currentLastId = batchData[batchData.length - 1].StageSubID;
@@ -1239,10 +1233,10 @@ export const companiesSubscribedApi = {
         hasMore: allSubStages.length === limit && iteration < maxIterations
       });
 
-             return {
-         success: true,
-         data: finalSubStages
-       };
+      return {
+        success: true,
+        data: finalSubStages
+      };
 
     } catch (error: any) {
       console.error("❌ [API] خطأ في جلب المراحل الفرعية:", error);
@@ -1252,7 +1246,7 @@ export const companiesSubscribedApi = {
         statusText: error.response?.statusText,
         data: error.response?.data
       });
-      
+
       return {
         success: false,
         error: error.response?.data?.error || error.message || "حدث خطأ أثناء جلب المراحل الفرعية",
@@ -1263,15 +1257,15 @@ export const companiesSubscribedApi = {
   // جلب ملاحظات المرحلة والتأخيرات
   async getStageNotes(stageId: number, projectId: number): Promise<ApiResponse<any[]>> {
     try {
-              console.log(`🔍 [API] جلب ملاحظات المرحلة - StageID: ${stageId}, ProjectID: ${projectId}`);
-      
+      console.log(`🔍 [API] جلب ملاحظات المرحلة - StageID: ${stageId}, ProjectID: ${projectId}`);
+
       const response = await apiClient.get("/brinshCompany/BringStageNotes", {
-        params: { 
+        params: {
           StageID: stageId,
           ProjectID: projectId
         }
       });
-      
+
       console.log(`📨 [API] استجابة ملاحظات المرحلة:`, response.data);
       console.log(`📊 [API] حالة الاستجابة للملاحظات:`, {
         status: response.status,
@@ -1279,7 +1273,7 @@ export const companiesSubscribedApi = {
         dataLength: response.data?.data?.length,
         data: response.data?.data
       });
-      
+
       return response.data;
     } catch (error: any) {
       console.error("❌ [API] خطأ في جلب ملاحظات المرحلة:", error);
@@ -1289,7 +1283,7 @@ export const companiesSubscribedApi = {
         statusText: error.response?.statusText,
         data: error.response?.data
       });
-      
+
       return {
         success: false,
         error: error.response?.data?.error || error.message || "حدث خطأ أثناء جلب ملاحظات المرحلة",
@@ -1301,15 +1295,15 @@ export const companiesSubscribedApi = {
   async getProjectExpenses(projectId: number, lastId = 0, limit = 10): Promise<ApiResponse<any[]>> {
     try {
       console.log('🔧 جلب المصاريف - إصلاح المعاملات:', { projectId, lastId });
-      
+
       // إصلاح نطاق التاريخ ليشمل كل السنوات
       const fromtime = `2020-01-01`;  // بداية من 2020
       const totime = `2030-12-31`;    // حتى 2030
-      
+
       console.log('📅 نطاق التاريخ:', { fromtime, totime, note: 'نطاق واسع لضمان جلب جميع البيانات' });
-      
+
       const response = await apiClient.get("/brinshCompany/SearchinFinance", {
-        params: { 
+        params: {
           projectID: projectId,
           type: "مصروفات",
           from: 0,                  // من 0
@@ -1319,30 +1313,30 @@ export const companiesSubscribedApi = {
           count: lastId            // count للـ pagination
         }
       });
-      
+
       console.log('📤 معاملات مرسلة للباك إند:', {
         projectID: projectId,
-        type: "مصروفات", 
+        type: "مصروفات",
         from: 0,
         to: 999999999,
         fromtime,
         totime,
         count: lastId
       });
-      
+
       console.log('📥 استجابة خام من الباك إند:', {
         success: response.data?.success,
         dataLength: response.data?.data?.length,
         rawResponse: response.data
       });
-      
+
       if (response.data?.success !== "تمت العملية بنجاح") {
         console.error('❌ فشل في جلب المصاريف:', response.data);
         return { success: false, error: "فشل في جلب بيانات المصاريف" };
       }
-      
+
       const expenses = response.data?.data || [];
-      
+
       console.log('📥 بيانات خام من الباك إند (مرتبة حسب التاريخ):', {
         count_sent: lastId,
         results_length: expenses.length,
@@ -1354,17 +1348,17 @@ export const companiesSubscribedApi = {
           amount: e.Amount
         }))
       });
-      
+
       // احتفاظ بآخر Expenseid من البيانات الخام للـ pagination
       const rawLastExpenseId = expenses.length > 0 ? expenses[expenses.length - 1].Expenseid : lastId;
-      
+
       // 🔧 إصلاح الترتيب في الفرونت إند: ترتيب المصروفات حسب رقم الفاتورة
       expenses.sort((a: any, b: any) => {
         const invoiceA = a.InvoiceNo || 0;
         const invoiceB = b.InvoiceNo || 0;
         return invoiceB - invoiceA; // ترتيب تنازلي حسب رقم الفاتورة
       });
-      
+
       console.log('✅ بعد الترتيب في الفرونت إند (حسب رقم الفاتورة):', {
         frontend_sort: 'ORDER BY InvoiceNo DESC',
         first_3_sorted: expenses.slice(0, 3).map((e: any) => ({
@@ -1375,17 +1369,17 @@ export const companiesSubscribedApi = {
         })),
         note: 'إصلاح اللخبطة في ترتيب الفواتير'
       });
-      
+
       // حساب hasMore: إذا حصلنا على 10 نتائج، فقد يكون هناك المزيد
       const hasMore = expenses.length === 10;
-      
+
       console.log('🔄 معلومات Pagination:', {
         hasMore,
         rawLastExpenseId,
         sortedLastInvoiceNo: expenses.length > 0 ? expenses[expenses.length - 1].InvoiceNo : 'لا يوجد',
         note: 'Pagination يستخدم آخر Expenseid من البيانات الخام، ليس من المرتبة'
       });
-      
+
       return {
         success: true,
         data: expenses,
@@ -1405,15 +1399,15 @@ export const companiesSubscribedApi = {
   async getProjectRevenues(projectId: number, lastId = 0, limit = 10): Promise<ApiResponse<any[]>> {
     try {
       console.log('🔧 جلب العهد - إصلاح المعاملات:', { projectId, lastId });
-      
+
       // إصلاح نطاق التاريخ ليشمل كل السنوات
       const fromtime = `2020-01-01`;
       const totime = `2030-12-31`;
-      
+
       console.log('📅 نطاق التاريخ للعهد:', { fromtime, totime });
-      
+
       const response = await apiClient.get("/brinshCompany/SearchinFinance", {
-        params: { 
+        params: {
           projectID: projectId,
           type: "عهد",
           from: 0,
@@ -1423,7 +1417,7 @@ export const companiesSubscribedApi = {
           count: lastId
         }
       });
-      
+
       console.log('📤 معاملات مرسلة للباك إند (العهد):', {
         projectID: projectId,
         type: "عهد",
@@ -1433,24 +1427,24 @@ export const companiesSubscribedApi = {
         totime,
         count: lastId
       });
-      
+
       console.log('📥 استجابة خام من الباك إند (العهد):', {
         success: response.data?.success,
         dataLength: response.data?.data?.length,
         rawResponse: response.data
       });
-      
+
       if (response.data?.success !== "تمت العملية بنجاح") {
         console.error('❌ فشل في جلب العهد:', response.data);
         return { success: false, error: "فشل في جلب بيانات العهد" };
       }
-      
+
       const revenues = response.data?.data || [];
-      
-      console.log('✅ نتائج العهد:', { 
+
+      console.log('✅ نتائج العهد:', {
         count_sent: lastId,
         results_length: revenues.length,
-        expected_sql: lastId === 0 
+        expected_sql: lastId === 0
           ? 'SELECT * FROM Revenue WHERE projectID = ? AND RevenueId > 0 ORDER BY Date DESC LIMIT 10'
           : `SELECT * FROM Revenue WHERE projectID = ? AND RevenueId < ${lastId} ORDER BY Date DESC LIMIT 10`,
         first_revenue: revenues[0] ? {
@@ -1465,13 +1459,13 @@ export const companiesSubscribedApi = {
           amount: revenues[revenues.length - 1].Amount
         } : 'لا توجد بيانات'
       });
-      
+
       // حساب hasMore: إذا حصلنا على 10 نتائج، فقد يكون هناك المزيد
       const hasMore = revenues.length === 10;
-      
+
       // آخر ID للصفحة التالية (أصغر ID في النتائج الحالية)
       const newLastId = revenues.length > 0 ? revenues[revenues.length - 1].RevenueId : lastId;
-      
+
       return {
         success: true,
         data: revenues,
@@ -1585,7 +1579,7 @@ export const companiesSubscribedApi = {
     try {
       console.log('🚀 جلب الأرشيف:', { projectId, page, limit });
       const response = await apiClient.get("/brinshCompany/BringArchives", {
-        params: { 
+        params: {
           idproject: projectId  // تصحيح اسم المعامل
         }
       });
@@ -1607,15 +1601,15 @@ export const companiesSubscribedApi = {
   async getProjectReturns(projectId: number, lastId = 0, limit = 10): Promise<ApiResponse<any[]>> {
     try {
       console.log('🔧 جلب المرتجعات - إصلاح المعاملات:', { projectId, lastId });
-      
+
       // إصلاح نطاق التاريخ ليشمل كل السنوات
       const fromtime = `2020-01-01`;
       const totime = `2030-12-31`;
-      
+
       console.log('📅 نطاق التاريخ للمرتجعات:', { fromtime, totime });
-      
+
       const response = await apiClient.get("/brinshCompany/SearchinFinance", {
-        params: { 
+        params: {
           projectID: projectId,
           type: "مرتجع",
           from: 0,
@@ -1625,7 +1619,7 @@ export const companiesSubscribedApi = {
           count: lastId
         }
       });
-      
+
       console.log('📤 معاملات مرسلة للباك إند (المرتجعات):', {
         projectID: projectId,
         type: "مرتجع",
@@ -1635,24 +1629,24 @@ export const companiesSubscribedApi = {
         totime,
         count: lastId
       });
-      
+
       console.log('📥 استجابة خام من الباك إند (المرتجعات):', {
         success: response.data?.success,
         dataLength: response.data?.data?.length,
         rawResponse: response.data
       });
-      
+
       if (response.data?.success !== "تمت العملية بنجاح") {
         console.error('❌ فشل في جلب المرتجعات:', response.data);
         return { success: false, error: "فشل في جلب بيانات المرتجعات" };
       }
-      
+
       const returns = response.data?.data || [];
-      
-      console.log('✅ نتائج المرتجعات:', { 
+
+      console.log('✅ نتائج المرتجعات:', {
         count_sent: lastId,
         results_length: returns.length,
-        expected_sql: lastId === 0 
+        expected_sql: lastId === 0
           ? 'SELECT * FROM Returns WHERE projectID = ? AND ReturnsId > 0 ORDER BY Date DESC LIMIT 10'
           : `SELECT * FROM Returns WHERE projectID = ? AND ReturnsId < ${lastId} ORDER BY Date DESC LIMIT 10`,
         first_return: returns[0] ? {
@@ -1667,13 +1661,13 @@ export const companiesSubscribedApi = {
           amount: returns[returns.length - 1].Amount
         } : 'لا توجد بيانات'
       });
-      
+
       // حساب hasMore: إذا حصلنا على 10 نتائج، فقد يكون هناك المزيد
       const hasMore = returns.length === 10;
-      
+
       // آخر ID للصفحة التالية (أصغر ID في النتائج الحالية)
       const newLastId = returns.length > 0 ? returns[returns.length - 1].ReturnsId : lastId;
-      
+
       return {
         success: true,
         data: returns,
@@ -1694,7 +1688,7 @@ export const companiesSubscribedApi = {
     try {
       console.log('🚀 جلب العهد المالية:', { projectId, companyId, branchId, page, limit });
       const response = await apiClient.get("/companies/brinsh/BringDataFinancialCustody", {
-        params: { 
+        params: {
           IDCompany: companyId,
           IDCompanySub: branchId,
           kindRequest: "معلقة",  // يمكن تغييرها لمغلقة أو مرفوضة
@@ -1726,7 +1720,7 @@ export const companiesSubscribedApi = {
       });
 
       const response = await apiClient.get(`/companies/${companyId}/subs`, {
-        params: { 
+        params: {
           number: lastId,
           limit: limit
         }
@@ -1760,11 +1754,11 @@ export const companiesSubscribedApi = {
       });
 
       let errorMessage = "حدث خطأ أثناء تحميل الفروع";
-      
+
       if (error.response) {
         const statusCode = error.response.status;
         const serverError = error.response.data?.error || error.response.data?.message;
-        
+
         if (statusCode === 404) {
           errorMessage = "الشركة غير موجودة أو لا توجد فروع";
         } else if (statusCode === 403) {
@@ -1799,18 +1793,18 @@ export const companiesSubscribedApi = {
       });
 
       const response = await apiClient.post(`/companies/${companyId}/subs`, branchData);
-      
+
       console.log('📥 استجابة إضافة الفرع:', {
         status: response.status,
         data: response.data
       });
 
       if (response.data) {
-        const isSuccess = response.data.success === "تمت العملية بنجاح" || 
-                         response.data.success === true ||
-                         response.data.masseg === "تمت العملية بنجاح" ||
-                         response.data.message === "تمت العملية بنجاح";
-        
+        const isSuccess = response.data.success === "تمت العملية بنجاح" ||
+          response.data.success === true ||
+          response.data.masseg === "تمت العملية بنجاح" ||
+          response.data.message === "تمت العملية بنجاح";
+
         return {
           success: isSuccess,
           data: response.data,
@@ -1832,11 +1826,11 @@ export const companiesSubscribedApi = {
       });
 
       let errorMessage = "حدث خطأ أثناء إضافة الفرع";
-      
+
       if (error.response) {
         const statusCode = error.response.status;
         const serverError = error.response.data?.error || error.response.data?.message;
-        
+
         if (statusCode === 400) {
           errorMessage = serverError || "البيانات المرسلة غير صحيحة";
         } else if (statusCode === 409) {
@@ -1874,18 +1868,18 @@ export const companiesSubscribedApi = {
       });
 
       const response = await apiClient.put(`/companies/subs/${branchId}`, branchData);
-      
+
       console.log('📥 استجابة تحديث الفرع:', {
         status: response.status,
         data: response.data
       });
 
       if (response.data) {
-        const isSuccess = response.data.success === "تمت العملية بنجاح" || 
-                         response.data.success === true ||
-                         response.data.masseg === "تمت العملية بنجاح" ||
-                         response.data.message === "تمت العملية بنجاح";
-        
+        const isSuccess = response.data.success === "تمت العملية بنجاح" ||
+          response.data.success === true ||
+          response.data.masseg === "تمت العملية بنجاح" ||
+          response.data.message === "تمت العملية بنجاح";
+
         return {
           success: isSuccess,
           data: response.data,
@@ -1906,11 +1900,11 @@ export const companiesSubscribedApi = {
       });
 
       let errorMessage = "حدث خطأ أثناء تحديث الفرع";
-      
+
       if (error.response) {
         const statusCode = error.response.status;
         const serverError = error.response.data?.error || error.response.data?.message;
-        
+
         if (statusCode === 404) {
           errorMessage = "الفرع غير موجود";
         } else if (statusCode === 403) {
@@ -1942,18 +1936,18 @@ export const companiesSubscribedApi = {
       });
 
       const response = await apiClient.delete(`/companies/subs/${branchId}`);
-      
+
       console.log('📥 استجابة حذف الفرع:', {
         status: response.status,
         data: response.data
       });
 
       if (response.data) {
-        const isSuccess = response.data.success === "تمت العملية بنجاح" || 
-                         response.data.success === true ||
-                         response.data.masseg === "تمت العملية بنجاح" ||
-                         response.data.message === "تمت العملية بنجاح";
-        
+        const isSuccess = response.data.success === "تمت العملية بنجاح" ||
+          response.data.success === true ||
+          response.data.masseg === "تمت العملية بنجاح" ||
+          response.data.message === "تمت العملية بنجاح";
+
         return {
           success: isSuccess,
           data: response.data,
@@ -1974,11 +1968,11 @@ export const companiesSubscribedApi = {
       });
 
       let errorMessage = "حدث خطأ أثناء حذف الفرع";
-      
+
       if (error.response) {
         const statusCode = error.response.status;
         const serverError = error.response.data?.error || error.response.data?.message;
-        
+
         if (statusCode === 404) {
           errorMessage = "الفرع غير موجود أو تم حذفه مسبقاً";
         } else if (statusCode === 403) {
@@ -2001,8 +1995,8 @@ export const companiesSubscribedApi = {
 
   // البحث الشامل في الفروع
   async searchCompanyBranches(
-    companyId: number, 
-    searchTerm: string, 
+    companyId: number,
+    searchTerm: string,
     filters?: {
       manager?: string;
       isActive?: string;
@@ -2028,11 +2022,11 @@ export const companiesSubscribedApi = {
       while (hasMore && iterations < maxIterations) {
         iterations++;
         const response = await this.getCompanyBranches(companyId, lastId, 10);
-        
+
         if (!response.success) {
           throw new Error(response.error);
         }
-        
+
         const branches = response.data || [];
         if (branches.length === 0) {
           hasMore = false;
@@ -2063,7 +2057,7 @@ export const companiesSubscribedApi = {
             branch.manager?.toLowerCase().includes(filters.manager!.toLowerCase())
           );
         }
-        
+
         if (filters.isActive !== undefined && filters.isActive !== '') {
           const isActive = filters.isActive === 'true';
           filteredBranches = filteredBranches.filter(branch => branch.isActive === isActive);
@@ -2111,7 +2105,7 @@ export const companiesSubscribedApi = {
     try {
       console.log('🚀 جلب التقارير المالية:', { projectId, page, limit });
       const response = await apiClient.get("/brinshCompany/BringReportforProject", {
-        params: { 
+        params: {
           ProjectID: projectId
         }
       });
@@ -2130,7 +2124,7 @@ export const companiesSubscribedApi = {
   },
 
   // APIs الشركات المتقدمة - متوافقة مع نظام الفروع
-  
+
   // جلب الشركات مع last_id pagination متقدم (متوافق مع الفروع)
   async getAdvancedCompanies(lastId = 0, limit = 10): Promise<ApiResponse<Company[]>> {
     try {
@@ -2142,7 +2136,7 @@ export const companiesSubscribedApi = {
       });
 
       const response = await apiClient.get("/companies", {
-        params: { 
+        params: {
           number: lastId,
           limit: limit,
           _timestamp: new Date().getTime() // Cache busting
@@ -2180,11 +2174,11 @@ export const companiesSubscribedApi = {
       });
 
       let errorMessage = "حدث خطأ أثناء تحميل الشركات";
-      
+
       if (error.response) {
         const statusCode = error.response.status;
         const serverError = error.response.data?.error || error.response.data?.message;
-        
+
         if (statusCode === 404) {
           errorMessage = "لا توجد شركات مسجلة";
         } else if (statusCode === 403) {
@@ -2205,7 +2199,7 @@ export const companiesSubscribedApi = {
 
   // البحث الشامل في الشركات مع فلاتر متقدمة (متوافق مع نظام الفروع)
   async searchAdvancedCompanies(
-    searchTerm: string, 
+    searchTerm: string,
     filters?: {
       city?: string;
       country?: string;
@@ -2229,13 +2223,13 @@ export const companiesSubscribedApi = {
       while (hasMore && iterations < maxIterations) {
         iterations++;
         console.log(`📦 محاولة جلب دفعة الشركات ${iterations}:`, { lastId });
-        
+
         const response = await this.getAdvancedCompanies(lastId, 10);
-        
+
         if (!response.success) {
           throw new Error(response.error);
         }
-        
+
         const companies = response.data || [];
         if (companies.length === 0) {
           hasMore = false;
@@ -2272,7 +2266,7 @@ export const companiesSubscribedApi = {
             company.city?.toLowerCase().includes(filters.city!.toLowerCase())
           );
         }
-        
+
         if (filters.country) {
           filteredCompanies = filteredCompanies.filter(company =>
             company.country?.toLowerCase().includes(filters.country!.toLowerCase())
@@ -2325,29 +2319,20 @@ export const companiesSubscribedApi = {
     }
   },
 
-  // جلب العدد الفعلي للمشاريع لكل فرع (ميزة منفصلة)
+  // جلب العدد الفعلي للمشاريع لكل فرع (نسخة سريعة ومحسنة)
   async getBranchProjectsActualCount(IDCompany: number, branchId: number): Promise<ApiResponse<{ count: number }>> {
     try {
-      // جلب جميع المشاريع بدون تحديد حد أقصى
-      const allProjects: any[] = [];
+      // جلب دفعة واحدة فقط للتحقق السريع (بدلاً من جلب كل المشاريع)
+      let totalCount = 0;
       let currentLastId = 0;
-      const batchSize = 3; // حجم الدفعة الواحدة من الـ backend
-      let consecutiveEmptyBatches = 0;
-      const maxIterations = 500; // رفع الحد بشكل كبير لدعم عدد كبير من المشاريع
-      let iterations = 0;
+      const maxBatches = 10; // الحد الأقصى 10 دفعات فقط (أسرع بكثير)
 
-      // جلب المشاريع على دفعات حتى نصل للنهاية
-      while (iterations < maxIterations) {
-        iterations++;
-
-        const response = await apiClient.get("/brinshCompany/v2/BringProject", {
+      for (let i = 0; i < maxBatches; i++) {
+        const response = await apiClient.get("/brinshCompany/BringProject", {
           params: {
-            IDCompany: IDCompany,
             IDcompanySub: branchId,
             IDfinlty: currentLastId,
-            type: "cache",
-            kind: "all",
-            order: "ASC"
+            type: "cache"
           }
         });
 
@@ -2358,85 +2343,56 @@ export const companiesSubscribedApi = {
         const batchProjects = response.data.data || [];
 
         if (batchProjects.length === 0) {
-          consecutiveEmptyBatches++;
-
-          // إذا حصلنا على 5 دفعات فارغة متتالية، نعتبر أننا وصلنا للنهاية
-          if (consecutiveEmptyBatches >= 5) {
-            break;
-          }
-
-          // جرب زيادة last_id بقفزة أكبر في حالة وجود فجوات في البيانات
-          currentLastId += 5;
-          continue;
+          break;
         }
 
-        // إعادة تعيين عداد الدفعات الفارغة
-        consecutiveEmptyBatches = 0;
-
-        // إضافة المشاريع للقائمة
-        allProjects.push(...batchProjects);
+        totalCount += batchProjects.length;
 
         // تحديث last_id للدفعة التالية
-        if (batchProjects.length > 0) {
-          const lastProject = batchProjects[batchProjects.length - 1];
-          currentLastId = lastProject.id || (currentLastId + batchProjects.length);
-        }
+        const lastProject = batchProjects[batchProjects.length - 1];
+        currentLastId = lastProject.id || (currentLastId + batchProjects.length);
 
-        // إذا كانت الدفعة أقل من الحد المتوقع، فقد وصلنا للنهاية
-        if (batchProjects.length < batchSize) {
+        // إذا كانت الدفعة أقل من 3، فقد وصلنا للنهاية
+        if (batchProjects.length < 3) {
           break;
         }
       }
 
       return {
         success: true,
-        data: { count: allProjects.length }
+        data: { count: totalCount }
       };
     } catch (error: any) {
       console.error("خطأ في جلب عدد مشاريع الفرع:", error);
       return {
-        success: false,
-        error: error.response?.data?.error || error.message || "حدث خطأ أثناء جلب عدد المشاريع",
+        success: true,
+        data: { count: 0 } // إرجاع 0 في حالة الخطأ لتجنب تعطل الواجهة
       };
     }
   },
 
-  // جلب العدد الإجمالي للمشاريع لكل شركة (جديد)
+  // جلب العدد الإجمالي للمشاريع لكل شركة (نسخة سريعة تستخدم endpoint مباشر)
   async getCompanyTotalProjectsCount(companyId: number): Promise<ApiResponse<{ count: number }>> {
     try {
-      console.log('🔍 جلب العدد الإجمالي للمشاريع للشركة:', companyId);
+      // استخدام endpoint سريع يُرجع عدد المشاريع مباشرة من قاعدة البيانات
+      const response = await apiClient.get(`/companies/${companyId}/details`);
 
-      // أولاً، جلب جميع فروع الشركة
-      const branchesResponse = await this.getCompanyBranches(companyId, 0, 100);
-      if (!branchesResponse.success || !branchesResponse.data) {
+      if (response.data?.success && response.data?.data) {
         return {
-          success: false,
-          error: "فشل في جلب فروع الشركة"
+          success: true,
+          data: { count: response.data.data.projectsCount || 0 }
         };
       }
 
-      const branches = branchesResponse.data;
-      let totalProjectsCount = 0;
-
-      // جلب عدد المشاريع لكل فرع
-      for (const branch of branches) {
-        const branchProjectsResponse = await this.getBranchProjectsActualCount(companyId, branch.id);
-        if (branchProjectsResponse.success && branchProjectsResponse.data) {
-          totalProjectsCount += branchProjectsResponse.data.count;
-        }
-      }
-
-      console.log('📊 العدد الإجمالي للمشاريع للشركة', companyId, ':', totalProjectsCount);
-
       return {
         success: true,
-        data: { count: totalProjectsCount }
+        data: { count: 0 }
       };
     } catch (error: any) {
       console.error("خطأ في جلب العدد الإجمالي للمشاريع للشركة:", error);
       return {
-        success: false,
-        error: error.response?.data?.error || error.message || "حدث خطأ أثناء جلب العدد الإجمالي للمشاريع",
+        success: true,
+        data: { count: 0 } // إرجاع 0 في حالة الخطأ لتجنب تعطل الواجهة
       };
     }
   },

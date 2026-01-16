@@ -121,14 +121,14 @@ export default function DashboardLayout() {
   const { darkMode, toggleDarkMode } = useTheme();
   const navigate = useNavigate();
   const isMobile = useMediaQuery(theme => theme.breakpoints.down('sm'));
-  
+
   const { userProfile, updateUserProfile, profileUpdateStatus } = useUser();
-  
+
   const [openImageDialog, setOpenImageDialog] = useState(false);
   const [isImageLoading, setIsImageLoading] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const fileInputRef = useRef(null);
-  
+
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: '',
@@ -143,7 +143,7 @@ export default function DashboardLayout() {
         severity: 'success',
       });
     }
-    
+
     if (profileUpdateStatus.error) {
       setSnackbar({
         open: true,
@@ -213,7 +213,7 @@ export default function DashboardLayout() {
         });
         return;
       }
-      
+
       if (file.size > 5 * 1024 * 1024) {
         setSnackbar({
           open: true,
@@ -222,24 +222,24 @@ export default function DashboardLayout() {
         });
         return;
       }
-      
+
       const reader = new FileReader();
       setIsImageLoading(true);
-      
+
       reader.onload = (e) => {
         setPreviewImage(e.target.result);
         setIsImageLoading(false);
       };
-      
+
       reader.readAsDataURL(file);
     }
   };
-  
+
   const handleSaveImage = () => {
     if (previewImage) {
       setIsImageLoading(true);
       updateUserProfile({ avatar: previewImage });
-      
+
       setTimeout(() => {
         setIsImageLoading(false);
         setOpenImageDialog(false);
@@ -260,6 +260,9 @@ export default function DashboardLayout() {
   };
 
   const handleLogout = () => {
+    // مسح بيانات المستخدم من التخزين المحلي
+    localStorage.removeItem('user');
+    localStorage.removeItem('lastLoginTime');
     setIsAuthenticated(false);
     handleCloseMenu();
   };
@@ -311,27 +314,27 @@ export default function DashboardLayout() {
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Logo size="small" sx={{ mr: 1.5 }} />
             {!isMobile && (
-              <Typography 
-                variant="h6" 
-                component="div" 
-                sx={{ 
-                  fontWeight: 'bold', 
-                  color: theme => theme.palette.common.white 
+              <Typography
+                variant="h6"
+                component="div"
+                sx={{
+                  fontWeight: 'bold',
+                  color: theme => theme.palette.common.white
                 }}
               >
                 مشرف
               </Typography>
             )}
           </Box>
-          
+
           {/* Global Search Bar (disabled, keep placeholder to preserve layout) */}
-          <Box sx={{ 
-            flexGrow: 1, 
-            display: { xs: 'none', md: 'flex' }, 
-            justifyContent: 'center', 
+          <Box sx={{
+            flexGrow: 1,
+            display: { xs: 'none', md: 'flex' },
+            justifyContent: 'center',
             mx: { xs: 1, md: 4 }
           }} />
-          
+
           <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1 }}>
             <Tooltip title="الوضع المظلم">
               <IconButton
@@ -343,11 +346,11 @@ export default function DashboardLayout() {
               </IconButton>
             </Tooltip>
             <Tooltip title="الإعدادات السريعة">
-              <IconButton 
-                color="inherit" 
+              <IconButton
+                color="inherit"
                 onClick={handleMenu}
               >
-                <ProfileAvatar 
+                <ProfileAvatar
                   size="small"
                   status="online"
                   sx={{ bgcolor: 'primary.dark' }}
@@ -365,11 +368,11 @@ export default function DashboardLayout() {
               <MenuIcon />
             </IconButton>
           </Box>
-          
+
           {/* Mobile Search & Menu Buttons (swapped order on mobile) */}
-          <Box sx={{ 
-            flexGrow: 1, 
-            display: { xs: 'flex', md: 'none' }, 
+          <Box sx={{
+            flexGrow: 1,
+            display: { xs: 'flex', md: 'none' },
             justifyContent: 'flex-end',
             gap: 0.5
           }}>
@@ -393,7 +396,7 @@ export default function DashboardLayout() {
               <MenuIcon />
             </IconButton>
           </Box>
-          
+
           <Menu
             anchorEl={anchorEl}
             open={Boolean(anchorEl)}
@@ -461,7 +464,7 @@ export default function DashboardLayout() {
         <Divider />
         <Box sx={{ p: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <ProfileAvatar 
+            <ProfileAvatar
               size="medium"
               onClick={handleNavigateToSettings}
               tooltip="الذهاب إلى الملف الشخصي"
@@ -470,7 +473,7 @@ export default function DashboardLayout() {
             />
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                                      {userProfile.firstName}
+                {userProfile.firstName}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {userProfile.jobTitle}
@@ -481,15 +484,15 @@ export default function DashboardLayout() {
         <Divider />
         <List>
           {menuItems.map((item) => (
-              <ListItem key={item.text} disablePadding>
-                <ListItemButton onClick={() => handleNavigate(item.path)}>
-                  <ListItemIcon>{item.icon}</ListItemIcon>
-                  <ListItemText
-                    primary={item.text}
-                    primaryTypographyProps={{ fontWeight: 'medium' }}
-                  />
-                </ListItemButton>
-              </ListItem>
+            <ListItem key={item.text} disablePadding>
+              <ListItemButton onClick={() => handleNavigate(item.path)}>
+                <ListItemIcon>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={item.text}
+                  primaryTypographyProps={{ fontWeight: 'medium' }}
+                />
+              </ListItemButton>
+            </ListItem>
           ))}
         </List>
         <Divider />
@@ -500,7 +503,7 @@ export default function DashboardLayout() {
           </Typography>
         </Box>
       </Drawer>
-      
+
       <Dialog
         open={openImageDialog}
         onClose={handleCloseImageDialog}
@@ -509,17 +512,17 @@ export default function DashboardLayout() {
         <DialogTitle id="image-dialog-title">تغيير الصورة الشخصية</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 2 }}>
-            <ProfileAvatar 
+            <ProfileAvatar
               size="xlarge"
               src={previewImage || userProfile.avatar}
               sx={{ mb: 2, border: '4px solid', borderColor: 'divider' }}
               useCurrentUserAvatar={!previewImage && !userProfile.avatar}
             />
-            
+
             {isImageLoading && (
               <CircularProgress size={24} sx={{ position: 'absolute', top: '50%' }} />
             )}
-            
+
             <input
               ref={fileInputRef}
               type="file"
@@ -527,18 +530,18 @@ export default function DashboardLayout() {
               style={{ display: 'none' }}
               onChange={handleFileChange}
             />
-            
+
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%', mt: 2 }}>
-              <Button 
-                variant="contained" 
-                color="primary" 
+              <Button
+                variant="contained"
+                color="primary"
                 onClick={triggerFileInput}
                 disabled={isImageLoading}
                 startIcon={isImageLoading ? <CircularProgress size={20} color="inherit" /> : null}
               >
                 اختيار صورة من الجهاز
               </Button>
-              
+
               {previewImage && (
                 <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', mt: 1 }}>
                   تم اختيار الصورة. انقر على "حفظ" لتطبيق التغييرات.
@@ -548,17 +551,17 @@ export default function DashboardLayout() {
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button 
-            onClick={handleCloseImageDialog} 
+          <Button
+            onClick={handleCloseImageDialog}
             disabled={isImageLoading}
           >
             إلغاء
           </Button>
-          
+
           {previewImage && (
-            <Button 
-              onClick={handleSaveImage} 
-              color="primary" 
+            <Button
+              onClick={handleSaveImage}
+              color="primary"
               variant="contained"
               disabled={isImageLoading}
               startIcon={isImageLoading ? <CircularProgress size={20} color="inherit" /> : null}
@@ -568,16 +571,16 @@ export default function DashboardLayout() {
           )}
         </DialogActions>
       </Dialog>
-      
+
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
-        <Alert 
-          onClose={handleCloseSnackbar} 
-          severity={snackbar.severity} 
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbar.severity}
           variant="filled"
           sx={{ width: '100%' }}
         >
