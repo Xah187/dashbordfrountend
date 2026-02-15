@@ -87,7 +87,7 @@ import { getSubscriptionTypeColor, getSoftSubscriptionStatusChipSx, getAutoRenew
 import { AutoRenewBadge, SubscriptionStatusBadge } from '../components/common';
 
 // استيراد APIs الجديدة المفعلة للاشتراكات والطلبات المعلقة
-import { 
+import {
   fetchSubscriptions as fetchSubscriptionsAPI,
   fetchSubscriptionStats,
   fetchPendingSubscriptionRequests,
@@ -97,49 +97,72 @@ import {
   suspendSubscription
 } from '../api';
 
+// استيراد API أنواع الاشتراكات (التسعيرات)
+import {
+  fetchSubscriptionTypes,
+  insertSubscriptionType,
+  updateSubscriptionType,
+  deleteSubscriptionType
+} from '../api/subscriptionTypesApi';
+
 const Subscriptions = () => {
   const theme = useTheme();
-  
+
   // State للبيانات
   const [subscriptions, setSubscriptions] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedSubscription, setSelectedSubscription] = useState(null);
-  
+
   // State للبحث والفلترة
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [sortBy, setSortBy] = useState('SubscriptionEndDate');
   const [sortOrder, setSortOrder] = useState('ASC');
-  
+
   // State للـ pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  
+
   // State للحوارات
   const [openRenewDialog, setOpenRenewDialog] = useState(false);
   const [openSuspendDialog, setOpenSuspendDialog] = useState(false);
   const [openDetailsDialog, setOpenDetailsDialog] = useState(false);
   const [openRequestDialog, setOpenRequestDialog] = useState(false);
   const [openRequestDetailsDialog, setOpenRequestDetailsDialog] = useState(false);
-  
+
   // State للطلبات
   const [pendingRequests, setPendingRequests] = useState([]);
   const [selectedRequest, setSelectedRequest] = useState(null);
-  
+
   // State للإشعارات
   const [notification, setNotification] = useState({
     open: false,
     message: '',
     severity: 'success'
   });
-  
+
   // State للتبويبات
-  const [activeTab, setActiveTab] = useState(0); // 0: الاشتراكات، 1: الطلبات المعلقة، 2: الإحصائيات
-  
+  const [activeTab, setActiveTab] = useState(0); // 0: الاشتراكات، 1: الطلبات المعلقة، 2: الإحصائيات، 3: أنواع الاشتراكات
+
+  // State لأنواع الاشتراكات (التسعيرات)
+  const [subscriptionTypes, setSubscriptionTypes] = useState([]);
+  const [typesLoading, setTypesLoading] = useState(false);
+  const [openTypeDialog, setOpenTypeDialog] = useState(false);
+  const [editingType, setEditingType] = useState(null);
+  const [typeFormData, setTypeFormData] = useState({
+    name: '',
+    duration_in_months: '',
+    price_per_project: '',
+    discraption: ''
+  });
+  const [openDeleteTypeDialog, setOpenDeleteTypeDialog] = useState(false);
+  const [deletingType, setDeletingType] = useState(null);
+  const [typeSaving, setTypeSaving] = useState(false);
+
   // State للتحديث
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
@@ -149,7 +172,7 @@ const Subscriptions = () => {
   const fetchSubscriptions = async () => {
     try {
       setLoading(true);
-      
+
       const result = await fetchSubscriptionsAPI({
         page: currentPage,
         limit: itemsPerPage,
@@ -158,11 +181,11 @@ const Subscriptions = () => {
         sortBy: sortBy,
         sortOrder: sortOrder
       });
-      
+
       setSubscriptions(Array.isArray(result.data) ? result.data : []);
       setTotalItems(result.pagination?.totalItems || 0);
       setTotalPages(result.pagination?.totalPages || 0);
-      
+
     } catch (err) {
       console.error('❌ Error fetching subscriptions with NEW API:', err);
       setError(err.message);
@@ -179,9 +202,9 @@ const Subscriptions = () => {
   const fetchStats = async () => {
     try {
       const result = await fetchSubscriptionStats();
-      
+
       setStats(result.data || {});
-      
+
     } catch (err) {
       console.error('❌ Error fetching subscription stats with NEW API:', err);
       // التأكد من بقاء المتغير كـ object فارغ في حالة الخطأ
@@ -193,9 +216,9 @@ const Subscriptions = () => {
   const fetchPendingRequests = async () => {
     try {
       const result = await fetchPendingSubscriptionRequests();
-      
+
       setPendingRequests(Array.isArray(result.data) ? result.data : []);
-      
+
     } catch (err) {
       console.error('❌ Error fetching pending requests with NEW API:', err);
       // التأكد من بقاء المتغير كـ array فارغ في حالة الخطأ
@@ -207,18 +230,18 @@ const Subscriptions = () => {
   const handleApproveRequest = async (requestId) => {
     try {
       const result = await approveSubscriptionRequest(requestId);
-      
+
       // setNotification({
       //   open: true,
       //   message: 'تم قبول الطلب بنجاح وإنشاء الاشتراك',
       //   severity: 'success'
       // });
-      
+
       // // تحديث البيانات
       // fetchPendingRequests();
       // fetchSubscriptions();
       // fetchStats();
-      
+
     } catch (err) {
       console.error('❌ Error approving request with NEW API:', err);
       setNotification({
@@ -233,15 +256,15 @@ const Subscriptions = () => {
   const handleRejectRequest = async (requestId, reason) => {
     try {
       const result = await rejectSubscriptionRequest(requestId, reason);
-      
+
       setNotification({
         open: true,
         message: 'تم حذف الطلب بنجاح',
         severity: 'info'
       });
-      
+
       fetchPendingRequests(); // تحديث قائمة الطلبات
-      
+
     } catch (err) {
       console.error('❌ Error rejecting request with NEW API:', err);
       setNotification({
@@ -249,6 +272,101 @@ const Subscriptions = () => {
         message: err.message,
         severity: 'error'
       });
+    }
+  };
+
+  // === وظائف أنواع الاشتراكات ===
+
+  // جلب أنواع الاشتراكات
+  const loadSubscriptionTypes = async () => {
+    try {
+      setTypesLoading(true);
+      const data = await fetchSubscriptionTypes();
+      setSubscriptionTypes(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('❌ Error loading subscription types:', err);
+      setNotification({ open: true, message: 'خطأ في جلب أنواع الاشتراكات: ' + (err.message || ''), severity: 'error' });
+    } finally {
+      setTypesLoading(false);
+    }
+  };
+
+  // فتح نافذة إضافة نوع جديد
+  const openAddTypeDialog = () => {
+    setEditingType(null);
+    setTypeFormData({ name: '', duration_in_months: '', price_per_project: '', discraption: '' });
+    setOpenTypeDialog(true);
+  };
+
+  // فتح نافذة تعديل نوع
+  const openEditTypeDialog = (type) => {
+    setEditingType(type);
+    setTypeFormData({
+      name: type.name || '',
+      duration_in_months: type.duration_in_months?.toString() || '',
+      price_per_project: type.price_per_project?.toString() || '',
+      discraption: type.discraption || ''
+    });
+    setOpenTypeDialog(true);
+  };
+
+  // حفظ (إضافة أو تعديل) نوع اشتراك
+  const handleSaveType = async () => {
+    if (!typeFormData.name.trim()) {
+      setNotification({ open: true, message: 'يرجى إدخال اسم الباقة', severity: 'warning' });
+      return;
+    }
+    if (!typeFormData.duration_in_months || isNaN(Number(typeFormData.duration_in_months))) {
+      setNotification({ open: true, message: 'يرجى إدخال مدة صحيحة بالأشهر', severity: 'warning' });
+      return;
+    }
+    if (!typeFormData.price_per_project || isNaN(Number(typeFormData.price_per_project))) {
+      setNotification({ open: true, message: 'يرجى إدخال سعر صحيح لكل مشروع', severity: 'warning' });
+      return;
+    }
+
+    try {
+      setTypeSaving(true);
+      const payload = {
+        name: typeFormData.name.trim(),
+        duration_in_months: Number(typeFormData.duration_in_months),
+        price_per_project: Number(typeFormData.price_per_project),
+        discraption: typeFormData.discraption?.trim() || ''
+      };
+
+      if (editingType) {
+        await updateSubscriptionType({ ...payload, id: editingType.id });
+        setNotification({ open: true, message: 'تم تعديل نوع الاشتراك بنجاح ✅', severity: 'success' });
+      } else {
+        await insertSubscriptionType(payload);
+        setNotification({ open: true, message: 'تم إضافة نوع الاشتراك بنجاح ✅', severity: 'success' });
+      }
+
+      setOpenTypeDialog(false);
+      loadSubscriptionTypes();
+    } catch (err) {
+      console.error('❌ Error saving subscription type:', err);
+      setNotification({ open: true, message: 'خطأ في حفظ نوع الاشتراك: ' + (err.message || ''), severity: 'error' });
+    } finally {
+      setTypeSaving(false);
+    }
+  };
+
+  // حذف نوع اشتراك
+  const handleDeleteType = async () => {
+    if (!deletingType) return;
+    try {
+      setTypeSaving(true);
+      await deleteSubscriptionType(deletingType.id);
+      setNotification({ open: true, message: 'تم حذف نوع الاشتراك بنجاح ✅', severity: 'success' });
+      setOpenDeleteTypeDialog(false);
+      setDeletingType(null);
+      loadSubscriptionTypes();
+    } catch (err) {
+      console.error('❌ Error deleting subscription type:', err);
+      setNotification({ open: true, message: 'خطأ في حذف نوع الاشتراك: ' + (err.message || ''), severity: 'error' });
+    } finally {
+      setTypeSaving(false);
     }
   };
 
@@ -279,6 +397,7 @@ const Subscriptions = () => {
     fetchSubscriptions();
     fetchStats();
     fetchPendingRequests();
+    loadSubscriptionTypes();
   }, [currentPage, itemsPerPage, searchQuery, filterStatus, sortBy, sortOrder]);
 
   // دالة تجديد الاشتراك
@@ -291,11 +410,11 @@ const Subscriptions = () => {
         },
         body: JSON.stringify(subscriptionData),
       });
-      
+
       if (!response.ok) {
         throw new Error('فشل في تجديد الاشتراك');
       }
-      
+
       const data = await response.json();
       if (data.success) {
         setNotification({
@@ -328,11 +447,11 @@ const Subscriptions = () => {
         },
         body: JSON.stringify({ reason }),
       });
-      
+
       if (!response.ok) {
         throw new Error('فشل في إيقاف الاشتراك');
       }
-      
+
       const data = await response.json();
       if (data.success) {
         setNotification({
@@ -359,14 +478,14 @@ const Subscriptions = () => {
   const handleExportToExcel = () => {
     const fields = ['companyName', 'planName', 'startDate', 'endDate', 'amount', 'status', 'autoRenew', 'paymentMethod'];
     const headers = ['الشركة', 'الباقة', 'تاريخ البدء', 'تاريخ الانتهاء', 'المبلغ (ر.س)', 'الحالة', 'التجديد التلقائي', 'طريقة الدفع'];
-    
+
     const formattedSubscriptions = subscriptions.map(sub => ({
       ...sub,
       status: getStatusText(sub.status),
       autoRenew: sub.autoRenew ? 'مفعل' : 'غير مفعل',
       amount: sub.amount.toLocaleString('en-GB')
     }));
-    
+
     // تم إزالة تصدير البيانات إلى Excel
   };
 
@@ -403,10 +522,10 @@ const Subscriptions = () => {
   // دالة حساب الأيام المتبقية
   const getDaysRemaining = (endDate) => {
     if (!endDate) return 0;
-    
+
     const today = new Date();
     let end;
-    
+
     // التحقق من تنسيق التاريخ
     if (endDate.includes('/')) {
       // تنسيق dd/mm/yyyy
@@ -416,7 +535,7 @@ const Subscriptions = () => {
       // تنسيق ISO أو تنسيق آخر
       end = new Date(endDate);
     }
-    
+
     const diffTime = end - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
@@ -442,7 +561,7 @@ const Subscriptions = () => {
           </CardContent>
         </Card>
       </Grid>
-      
+
       <Grid item xs={12} sm={6} md={3}>
         <Card>
           <CardContent>
@@ -460,7 +579,7 @@ const Subscriptions = () => {
           </CardContent>
         </Card>
       </Grid>
-      
+
       <Grid item xs={12} sm={6} md={3}>
         <Card>
           <CardContent>
@@ -478,7 +597,7 @@ const Subscriptions = () => {
           </CardContent>
         </Card>
       </Grid>
-      
+
       <Grid item xs={12} sm={6} md={3}>
         <Card>
           <CardContent>
@@ -522,7 +641,7 @@ const Subscriptions = () => {
               }}
             />
           </Grid>
-          
+
           <Grid item xs={12} md={2}>
             <FormControl fullWidth>
               <InputLabel>الحالة</InputLabel>
@@ -538,7 +657,7 @@ const Subscriptions = () => {
               </Select>
             </FormControl>
           </Grid>
-          
+
           <Grid item xs={12} md={2}>
             <FormControl fullWidth>
               <InputLabel>الترتيب</InputLabel>
@@ -553,7 +672,7 @@ const Subscriptions = () => {
               </Select>
             </FormControl>
           </Grid>
-          
+
           <Grid item xs={12} md={2}>
             <Button
               variant="outlined"
@@ -564,13 +683,13 @@ const Subscriptions = () => {
               {sortOrder === 'ASC' ? 'تصاعدي' : 'تنازلي'}
             </Button>
           </Grid>
-          
+
           <Grid item xs={12} md={2}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '56px' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CircularProgress 
-                  size={20} 
-                  sx={{ 
+                <CircularProgress
+                  size={20}
+                  sx={{
                     color: isAutoRefreshing ? 'success.main' : 'action.disabled',
                     animation: isAutoRefreshing ? 'pulse 1s infinite' : 'none',
                     '@keyframes pulse': {
@@ -578,7 +697,7 @@ const Subscriptions = () => {
                       '50%': { opacity: 0.5 },
                       '100%': { opacity: 1 }
                     }
-                  }} 
+                  }}
                 />
                 <Typography variant="body2" color="text.secondary">
                   تحديث تلقائي
@@ -604,9 +723,9 @@ const Subscriptions = () => {
             إدارة الاشتراكات
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <CircularProgress 
-              size={20} 
-              sx={{ 
+            <CircularProgress
+              size={20}
+              sx={{
                 color: isAutoRefreshing ? 'success.main' : 'action.disabled',
                 animation: isAutoRefreshing ? 'pulse 1s infinite' : 'none',
                 '@keyframes pulse': {
@@ -614,7 +733,7 @@ const Subscriptions = () => {
                   '50%': { opacity: 0.5 },
                   '100%': { opacity: 1 }
                 }
-              }} 
+              }}
             />
             <Typography variant="body2" color="text.secondary">
               تحديث تلقائي (30 ثانية)
@@ -646,18 +765,18 @@ const Subscriptions = () => {
       {/* التبويبات */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Tabs 
-            value={activeTab} 
+          <Tabs
+            value={activeTab}
             onChange={(e, newValue) => setActiveTab(newValue)}
             variant="scrollable"
             scrollButtons="auto"
             allowScrollButtonsMobile
             sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
           >
-            <Tab 
+            <Tab
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Badge 
+                  <Badge
                     badgeContent={stats.activeSubscriptions || stats.totalCompanies || 0}
                     color="primary"
                     overlap="circular"
@@ -668,12 +787,12 @@ const Subscriptions = () => {
                   </Badge>
                   <span>الاشتراكات النشطة</span>
                 </Box>
-              } 
+              }
             />
-            <Tab 
+            <Tab
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Badge 
+                  <Badge
                     badgeContent={pendingRequests?.length || 0}
                     color="warning"
                     overlap="circular"
@@ -684,18 +803,34 @@ const Subscriptions = () => {
                   </Badge>
                   <span>طلبات الاشتراك</span>
                 </Box>
-              } 
+              }
             />
-            <Tab 
+            <Tab
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <AssessmentIcon />
                   <span>التقارير</span>
                 </Box>
-              } 
+              }
+            />
+            <Tab
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Badge
+                    badgeContent={subscriptionTypes?.length || 0}
+                    color="info"
+                    overlap="circular"
+                    anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                    sx={{ '& .MuiBadge-badge': { fontSize: 10, height: 18, minWidth: 18 } }}
+                  >
+                    <PaymentIcon />
+                  </Badge>
+                  <span>أنواع الاشتراكات</span>
+                </Box>
+              }
             />
           </Tabs>
-          
+
           {/* أزرار الإجراءات */}
           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
             <Button
@@ -706,7 +841,7 @@ const Subscriptions = () => {
             >
               تصدير إلى Excel ({activeTab === 0 ? (stats.activeSubscriptions || 0) : (pendingRequests?.length || 0)})
             </Button>
-            
+
             <Button
               variant="outlined"
               startIcon={<AutoRenewIcon />}
@@ -738,9 +873,9 @@ const Subscriptions = () => {
                   الاشتراكات النشطة ({stats.activeSubscriptions || stats.totalCompanies || 0} إجمالي، {subscriptions?.length || 0} في هذه الصفحة)
                 </Typography>
                 <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
-                  <Table 
-                    size="small" 
-                    sx={{ 
+                  <Table
+                    size="small"
+                    sx={{
                       minWidth: { xs: 600, md: 900 },
                       '& th, & td': { whiteSpace: 'nowrap', fontSize: { xs: '0.8rem', sm: '0.9rem' }, py: { xs: 0.75, sm: 1 } }
                     }}
@@ -758,145 +893,145 @@ const Subscriptions = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                    {(subscriptions?.length || 0) === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
-                          <Box sx={{ textAlign: 'center' }}>
-                            <BusinessIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-                            <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 2 }}>
-                              لا توجد اشتراكات
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              لم يتم العثور على أي اشتراكات بناءً على المعايير المحددة
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      subscriptions.map((subscription) => {
-                        const daysRemaining = getDaysRemaining(subscription.endDate);
-                        return (
-                          <TableRow key={subscription.id}>
-                            <TableCell>
-                              <Box>
-                                <Typography variant="subtitle2" fontWeight="bold">
-                                  {subscription.companyName}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {subscription.city}, {subscription.country}
-                                </Typography>
-                              </Box>
-                            </TableCell>
-                            <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
-                              <Chip
-                                label={subscription.planName}
-                                color="primary"
-                                variant="outlined"
-                                size="small"
-                              />
-                            </TableCell>
-                            <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
-                              {subscription.startDate || 'غير محدد'}
-                            </TableCell>
-                            <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
-                              <Box>
-                                <Typography variant="body2">
-                                  {subscription.endDate || 'غير محدد'}
-                                </Typography>
-                                {(() => {
-                                  const daysRemaining = getDaysRemaining(subscription.endDate);
-                                  if (daysRemaining > 0 && daysRemaining <= 30) {
-                                    return (
-                                      <Typography variant="caption" color="warning.main">
-                                        {daysRemaining} يوم متبقي
-                                      </Typography>
-                                    );
-                                  } else if (daysRemaining < 0) {
-                                    return (
-                                      <Typography variant="caption" color="error.main">
-                                        منتهي منذ {Math.abs(daysRemaining)} يوم
-                                      </Typography>
-                                    );
-                                  }
-                                  return null;
-                                })()}
-                              </Box>
-                            </TableCell>
-                            <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
-                              <Typography variant="body2" fontWeight="bold">
-                                {subscription.amount.toLocaleString('en-GB')} ر.س
+                      {(subscriptions?.length || 0) === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                            <Box sx={{ textAlign: 'center' }}>
+                              <BusinessIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+                              <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 2 }}>
+                                لا توجد اشتراكات
                               </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <Chip
-                                icon={getStatusIcon(subscription.status)}
-                                label={getStatusText(subscription.status)}
-                                size="small"
-                                sx={{
-                                  ...getSoftSubscriptionStatusChipSx(subscription.status),
-                                  fontWeight: 'bold',
-                                  minWidth: '80px'
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
-                              <Box>
-                                <Typography variant="body2">
-                                  {subscription.currentBranches} / {subscription.branchesAllowed}
+                              <Typography variant="body2" color="text.secondary">
+                                لم يتم العثور على أي اشتراكات بناءً على المعايير المحددة
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        subscriptions.map((subscription) => {
+                          const daysRemaining = getDaysRemaining(subscription.endDate);
+                          return (
+                            <TableRow key={subscription.id}>
+                              <TableCell>
+                                <Box>
+                                  <Typography variant="subtitle2" fontWeight="bold">
+                                    {subscription.companyName}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {subscription.city}, {subscription.country}
+                                  </Typography>
+                                </Box>
+                              </TableCell>
+                              <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                                <Chip
+                                  label={subscription.planName}
+                                  color="primary"
+                                  variant="outlined"
+                                  size="small"
+                                />
+                              </TableCell>
+                              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                                {subscription.startDate || 'غير محدد'}
+                              </TableCell>
+                              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                                <Box>
+                                  <Typography variant="body2">
+                                    {subscription.endDate || 'غير محدد'}
+                                  </Typography>
+                                  {(() => {
+                                    const daysRemaining = getDaysRemaining(subscription.endDate);
+                                    if (daysRemaining > 0 && daysRemaining <= 30) {
+                                      return (
+                                        <Typography variant="caption" color="warning.main">
+                                          {daysRemaining} يوم متبقي
+                                        </Typography>
+                                      );
+                                    } else if (daysRemaining < 0) {
+                                      return (
+                                        <Typography variant="caption" color="error.main">
+                                          منتهي منذ {Math.abs(daysRemaining)} يوم
+                                        </Typography>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
+                                </Box>
+                              </TableCell>
+                              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                                <Typography variant="body2" fontWeight="bold">
+                                  {subscription.amount.toLocaleString('en-GB')} ر.س
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {subscription.remainingBranches} متبقي
-                                </Typography>
-                              </Box>
-                            </TableCell>
-                            <TableCell>
-                              <Box sx={{ display: 'flex', gap: 1 }}>
-                                <Tooltip title="عرض التفاصيل">
-                              <IconButton
-                                    size="small"
-                                    onClick={() => {
-                                      setSelectedSubscription(subscription);
-                                      setOpenDetailsDialog(true);
-                                    }}
-                                  >
-                                <VisibilityIcon sx={{ fontSize: { xs: 18, sm: 22 } }} />
-                                  </IconButton>
-                                </Tooltip>
-                                
-                                <Tooltip title="تجديد">
-                              <IconButton
-                                    size="small"
-                                    onClick={() => {
-                                      setSelectedSubscription(subscription);
-                                      setOpenRenewDialog(true);
-                                    }}
-                                  >
-                                <AutoRenewIcon sx={{ fontSize: { xs: 18, sm: 22 } }} />
-                                  </IconButton>
-                                </Tooltip>
-                                
-                                <Tooltip title="إيقاف">
-                              <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() => {
-                                      setSelectedSubscription(subscription);
-                                      setOpenSuspendDialog(true);
-                                    }}
-                                  >
-                                <CancelIcon sx={{ fontSize: { xs: 18, sm: 22 } }} />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  icon={getStatusIcon(subscription.status)}
+                                  label={getStatusText(subscription.status)}
+                                  size="small"
+                                  sx={{
+                                    ...getSoftSubscriptionStatusChipSx(subscription.status),
+                                    fontWeight: 'bold',
+                                    minWidth: '80px'
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                                <Box>
+                                  <Typography variant="body2">
+                                    {subscription.currentBranches} / {subscription.branchesAllowed}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {subscription.remainingBranches} متبقي
+                                  </Typography>
+                                </Box>
+                              </TableCell>
+                              <TableCell>
+                                <Box sx={{ display: 'flex', gap: 1 }}>
+                                  <Tooltip title="عرض التفاصيل">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => {
+                                        setSelectedSubscription(subscription);
+                                        setOpenDetailsDialog(true);
+                                      }}
+                                    >
+                                      <VisibilityIcon sx={{ fontSize: { xs: 18, sm: 22 } }} />
+                                    </IconButton>
+                                  </Tooltip>
+
+                                  <Tooltip title="تجديد">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => {
+                                        setSelectedSubscription(subscription);
+                                        setOpenRenewDialog(true);
+                                      }}
+                                    >
+                                      <AutoRenewIcon sx={{ fontSize: { xs: 18, sm: 22 } }} />
+                                    </IconButton>
+                                  </Tooltip>
+
+                                  <Tooltip title="إيقاف">
+                                    <IconButton
+                                      size="small"
+                                      color="error"
+                                      onClick={() => {
+                                        setSelectedSubscription(subscription);
+                                        setOpenSuspendDialog(true);
+                                      }}
+                                    >
+                                      <CancelIcon sx={{ fontSize: { xs: 18, sm: 22 } }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+
                 {/* Pagination */}
                 {totalPages > 1 && (
                   <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
@@ -912,7 +1047,7 @@ const Subscriptions = () => {
               </>
             )
           )}
-          
+
           {/* التبويب الثاني: طلبات الاشتراك المعلقة */}
           {activeTab === 1 && (
             <>
@@ -1000,7 +1135,7 @@ const Subscriptions = () => {
                                   <CheckIcon />
                                 </IconButton>
                               </Tooltip>
-                              
+
                               <Tooltip title="حذف طلب">
                                 <IconButton
                                   size="small"
@@ -1013,7 +1148,7 @@ const Subscriptions = () => {
                                   <CloseIcon />
                                 </IconButton>
                               </Tooltip>
-                              
+
                               <Tooltip title="عرض التفاصيل">
                                 <IconButton
                                   size="small"
@@ -1035,7 +1170,7 @@ const Subscriptions = () => {
               </TableContainer>
             </>
           )}
-          
+
           {/* التبويب الثالث: التقارير */}
           {activeTab === 2 && (
             <Box sx={{ textAlign: 'center', py: 6 }}>
@@ -1047,6 +1182,110 @@ const Subscriptions = () => {
                 سيتم إضافة التقارير التفصيلية قريباً
               </Typography>
             </Box>
+          )}
+
+          {/* التبويب الرابع: أنواع الاشتراكات (التسعيرات) */}
+          {activeTab === 3 && (
+            <>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  أنواع الاشتراكات ({subscriptionTypes?.length || 0})
+                </Typography>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={openAddTypeDialog}
+                  sx={{ borderRadius: 2 }}
+                >
+                  إضافة نوع جديد
+                </Button>
+              </Box>
+
+              {typesLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                  <CircularProgress />
+                </Box>
+              ) : (subscriptionTypes?.length || 0) === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 6 }}>
+                  <PaymentIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 2 }}>
+                    لا توجد أنواع اشتراكات
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    ابدأ بإضافة أنواع الاشتراكات والتسعيرات
+                  </Typography>
+                  <Button variant="outlined" startIcon={<AddIcon />} onClick={openAddTypeDialog}>
+                    إضافة نوع جديد
+                  </Button>
+                </Box>
+              ) : (
+                <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: 'grey.50' }}>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.95rem' }}>#</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.95rem' }}>اسم الباقة</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.95rem' }}>المدة (أشهر)</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.95rem' }}>السعر لكل مشروع (ر.س)</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.95rem' }}>الوصف</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.95rem' }}>الإجراءات</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {subscriptionTypes.map((type, index) => (
+                        <TableRow
+                          key={type.id || index}
+                          sx={{ '&:hover': { bgcolor: 'action.hover' }, transition: 'background-color 0.2s' }}
+                        >
+                          <TableCell>{index + 1}</TableCell>
+                          <TableCell>
+                            <Typography variant="subtitle2" fontWeight="bold">
+                              {type.name}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={`${type.duration_in_months} شهر`}
+                              color="primary"
+                              variant="outlined"
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight="bold" color="success.main">
+                              {Number(type.price_per_project).toLocaleString('en-GB')} ر.س
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" color="text.secondary">
+                              {type.discraption || '—'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', gap: 0.5 }}>
+                              <Tooltip title="تعديل">
+                                <IconButton size="small" color="primary" onClick={() => openEditTypeDialog(type)}>
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="حذف">
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => { setDeletingType(type); setOpenDeleteTypeDialog(true); }}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -1193,16 +1432,101 @@ const Subscriptions = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenRequestDialog(false)}>إلغاء</Button>
-          <Button 
+          <Button
             onClick={() => {
               const reason = document.getElementById('rejection-reason')?.value || 'لم يتم تحديد السبب';
               handleRejectRequest(selectedRequest?.id, reason);
               setOpenRequestDialog(false);
-            }} 
+            }}
             color="error"
             variant="contained"
           >
             حذف الطلب
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* حوار إضافة/تعديل نوع اشتراك */}
+      <Dialog open={openTypeDialog} onClose={() => setOpenTypeDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>
+          {editingType ? 'تعديل نوع الاشتراك' : 'إضافة نوع اشتراك جديد'}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}>
+            <TextField
+              fullWidth
+              label="اسم الباقة"
+              value={typeFormData.name}
+              onChange={(e) => setTypeFormData({ ...typeFormData, name: e.target.value })}
+              required
+              placeholder="مثال: ثلاثة أشهر"
+            />
+            <TextField
+              fullWidth
+              label="المدة بالأشهر"
+              type="number"
+              value={typeFormData.duration_in_months}
+              onChange={(e) => setTypeFormData({ ...typeFormData, duration_in_months: e.target.value })}
+              required
+              placeholder="مثال: 3"
+              InputProps={{ inputProps: { min: 1 } }}
+            />
+            <TextField
+              fullWidth
+              label="السعر لكل مشروع (ر.س)"
+              type="number"
+              value={typeFormData.price_per_project}
+              onChange={(e) => setTypeFormData({ ...typeFormData, price_per_project: e.target.value })}
+              required
+              placeholder="مثال: 115"
+              InputProps={{ inputProps: { min: 0, step: 0.01 } }}
+            />
+            <TextField
+              fullWidth
+              label="الوصف (اختياري)"
+              multiline
+              rows={3}
+              value={typeFormData.discraption}
+              onChange={(e) => setTypeFormData({ ...typeFormData, discraption: e.target.value })}
+              placeholder="وصف اختياري لهذه الباقة..."
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setOpenTypeDialog(false)} disabled={typeSaving}>إلغاء</Button>
+          <Button
+            onClick={handleSaveType}
+            variant="contained"
+            disabled={typeSaving}
+            startIcon={typeSaving ? <CircularProgress size={18} /> : (editingType ? <EditIcon /> : <AddIcon />)}
+          >
+            {typeSaving ? 'جاري الحفظ...' : (editingType ? 'تعديل' : 'إضافة')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* حوار تأكيد حذف نوع اشتراك */}
+      <Dialog open={openDeleteTypeDialog} onClose={() => setOpenDeleteTypeDialog(false)}>
+        <DialogTitle sx={{ fontWeight: 'bold', color: 'error.main' }}>تأكيد الحذف</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            هل أنت متأكد من حذف نوع الاشتراك "{deletingType?.name}"؟
+            <br />
+            <strong>لا يمكن التراجع عن هذا الإجراء.</strong>
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setOpenDeleteTypeDialog(false); setDeletingType(null); }} disabled={typeSaving}>
+            إلغاء
+          </Button>
+          <Button
+            onClick={handleDeleteType}
+            color="error"
+            variant="contained"
+            disabled={typeSaving}
+            startIcon={typeSaving ? <CircularProgress size={18} /> : <DeleteIcon />}
+          >
+            {typeSaving ? 'جاري الحذف...' : 'حذف'}
           </Button>
         </DialogActions>
       </Dialog>
