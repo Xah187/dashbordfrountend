@@ -139,7 +139,7 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  
+
   // مرجع للكانفاس الخاص بالكابتشا
   const canvasRef = useRef(null);
 
@@ -151,7 +151,7 @@ const Login = () => {
 
   // حالة نافذة الدعم
   const [supportDialogOpen, setSupportDialogOpen] = useState(false);
-  
+
   // توليد رمز CAPTCHA عشوائي
   const generateCaptchaCode = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -161,23 +161,23 @@ const Login = () => {
     }
     return captcha;
   };
-  
+
   // رسم الكابتشا على الكانفاس
   const drawCaptcha = (captcha) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
+
     const ctx = canvas.getContext("2d");
     const width = canvas.width;
     const height = canvas.height;
-    
+
     // تنظيف الكانفاس
     ctx.clearRect(0, 0, width, height);
-    
+
     // خلفية عشوائية
     ctx.fillStyle = "#f5f5f5";
     ctx.fillRect(0, 0, width, height);
-    
+
     // إضافة خطوط وأشكال عشوائية للتشويش
     for (let i = 0; i < 10; i++) {
       ctx.beginPath();
@@ -187,7 +187,7 @@ const Login = () => {
       ctx.lineWidth = Math.random() * 2;
       ctx.stroke();
     }
-    
+
     // إضافة نقاط عشوائية للتشويش
     for (let i = 0; i < 100; i++) {
       ctx.beginPath();
@@ -195,19 +195,19 @@ const Login = () => {
       ctx.fillStyle = `rgba(${Math.random() * 200}, ${Math.random() * 200}, ${Math.random() * 200}, 0.5)`;
       ctx.fill();
     }
-    
+
     // كتابة النص
     ctx.font = "bold 24px Arial";
     ctx.fillStyle = "#333";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    
+
     // كتابة كل حرف بزاوية وحجم مختلف
     for (let i = 0; i < captcha.length; i++) {
       const x = (width / (captcha.length + 1)) * (i + 1);
       const y = height / 2 + Math.random() * 10 - 5;
       const rotation = Math.random() * 0.4 - 0.2; // زاوية عشوائية بين -0.2 و 0.2 راديان
-      
+
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(rotation);
@@ -216,7 +216,7 @@ const Login = () => {
       ctx.restore();
     }
   };
-  
+
   // تحديث الكابتشا
   const refreshCaptcha = () => {
     const newCaptchaCode = generateCaptchaCode();
@@ -225,34 +225,34 @@ const Login = () => {
     setCaptchaError("");
     setTimeout(() => drawCaptcha(newCaptchaCode), 50);
   };
-  
+
   // توليد الكابتشا عند تحميل الصفحة
   useEffect(() => {
     refreshCaptcha();
   }, []);
-  
+
   // التحقق من الكابتشا
   const handleVerifyCaptcha = (e) => {
     e.preventDefault();
-    
+
     if (!userCaptchaInput) {
       setCaptchaError("يرجى إدخال رمز التحقق");
       return;
     }
-    
+
     if (userCaptchaInput.toLowerCase() !== captchaCode.toLowerCase()) {
       setCaptchaError("رمز التحقق غير صحيح، يرجى المحاولة مرة أخرى");
       refreshCaptcha();
       setUserCaptchaInput("");
       return;
     }
-    
+
     // الانتقال إلى الخطوة التالية (إدخال رقم الهاتف)
     setStep(2);
     setCaptchaError("");
     setSuccess("تم التحقق بنجاح");
   };
-  
+
   // التعامل مع تغيير قيمة الكابتشا
   const handleCaptchaInputChange = (e) => {
     setUserCaptchaInput(e.target.value);
@@ -359,21 +359,19 @@ const Login = () => {
     try {
       // محاكاة إرسال الرمز
       await axios
-        .post(
-          `${API_BASE_URL}/api/dashbord/auth/login`,
-          { phoneNumber: phoneNumber },
+        .get(
+          `${API_BASE_URL}/api/auth?PhoneNumber=${phoneNumber}`,
           {
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${process.env.TOKEN_ADMIN || "dPdJ0ThcQ6ODl2_z5Nn2iO:APA91bE6yk0i_5M3YAmtAvBwEZIayJ4hOqFDMvQwQwhqTfn2bDwirSInge1kZGskTwvtzsEuZ6-FFU-06NVrAbTmB9UpQ63M9v5tgmKwj4_evGfJMz6PlIiWxOlvhHdnhR6fAbodYhRV"}  `,
             },
-            
           }
         )
         .then((res, err) => {
-          if (res.status === 501)
+          if (res.data && res.data.success === false)
             return setError(
-              "حدث خطأ أثناء إرسال الرمز. يرجى المحاولة مرة أخرى."
+              res.data.masseg || "حدث خطأ أثناء إرسال الرمز. يرجى المحاولة مرة أخرى."
             );
           if (res.status === 200) setStep(3);
         });
@@ -400,9 +398,8 @@ const Login = () => {
 
     try {
       await axios
-        .post(
-          `${API_BASE_URL}/api/dashbord/auth/login`,
-          { phoneNumber: phoneNumber },
+        .get(
+          `${API_BASE_URL}/api/auth?PhoneNumber=${phoneNumber}`,
           {
             headers: {
               "Content-Type": "application/json",
@@ -438,23 +435,21 @@ const Login = () => {
 
       await axios
         .get(
-          `${API_BASE_URL}/api/dashbord/auth/verification?output=${otpCode}&PhoneNumber=${phoneNumber}`,
-
+          `${API_BASE_URL}/api/auth/verification?output=${otpCode}&PhoneNumber=${phoneNumber}`,
           {
-           headers: {
+            headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${process.env.TOKEN_ADMIN || "dPdJ0ThcQ6ODl2_z5Nn2iO:APA91bE6yk0i_5M3YAmtAvBwEZIayJ4hOqFDMvQwQwhqTfn2bDwirSInge1kZGskTwvtzsEuZ6-FFU-06NVrAbTmB9UpQ63M9v5tgmKwj4_evGfJMz6PlIiWxOlvhHdnhR6fAbodYhRV"}  `,
-            },  
-          
+            },
           }
         )
         .then((res, err) => {
-          if (res.status === 501) return setError(res.masseg);
-          if (res.data.success !== false) {
+          if (res.data && res.data.success === false) return setError(res.data.masseg);
+          if (res.data && res.data.success !== false) {
             localStorage.setItem("user", JSON.stringify(res.data));
             setStep(2);
             setSuccess("تم التحقق بنجاح! جاري تسجيل الدخول...");
-           
+
 
             localStorage.setItem("lastLoginTime", new Date().toISOString());
             // انتظار قليل قبل تسجيل الدخول
@@ -480,7 +475,7 @@ const Login = () => {
     setError("");
     setSuccess("");
   };
-  
+
   // العودة لخطوة إدخال الكابتشا
   const handleBackToCaptcha = () => {
     setStep(1);
@@ -530,8 +525,8 @@ const Login = () => {
               {step === 1
                 ? "أدخل رمز التحقق للتأكد أنك لست روبوت"
                 : step === 2
-                ? "أدخل رقم هاتفك لتلقي رمز التحقق"
-                : "أدخل رمز التحقق المُرسل إلى هاتفك"}
+                  ? "أدخل رقم هاتفك لتلقي رمز التحقق"
+                  : "أدخل رمز التحقق المُرسل إلى هاتفك"}
             </Typography>
           </Box>
 
@@ -558,7 +553,7 @@ const Login = () => {
                 >
                   يرجى إدخال الرمز الظاهر في الصورة أدناه
                 </Typography>
-                
+
                 <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
                   <Box
                     sx={{
@@ -595,7 +590,7 @@ const Login = () => {
                     </Button>
                   </Box>
                 </Box>
-                
+
                 <FormControl fullWidth error={!!captchaError}>
                   <StyledTextField
                     fullWidth
@@ -617,7 +612,7 @@ const Login = () => {
                   {captchaError && <FormHelperText>{captchaError}</FormHelperText>}
                 </FormControl>
               </Box>
-              
+
               <SubmitButton
                 type="submit"
                 fullWidth
@@ -636,7 +631,7 @@ const Login = () => {
               </SubmitButton>
             </Box>
           )}
-          
+
           {/* الخطوة الثانية: إدخال رقم الهاتف */}
           {step === 2 && (
             <Box component="form" onSubmit={handleSendOTP}>
@@ -699,7 +694,7 @@ const Login = () => {
               >
                 {isLoading ? "جاري الإرسال..." : "إرسال رمز التحقق"}
               </SubmitButton>
-              
+
               {/* زر العودة للكابتشا */}
               <Button
                 fullWidth

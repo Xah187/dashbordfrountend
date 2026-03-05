@@ -16,8 +16,11 @@ import axios from "axios";
 import SecureStorage from "../utils/secureStorage";
 
 // إعداد Base URL للـ API
-export const API_BASE_URL =
-  process.env.REACT_APP_API_BASE_URL || "https://mushrf.net";
+// Since we are using a proxy in package.json to avoid CORS issues in development, 
+// the baseURL should just be empty (relative) in development, and the full domain in production.
+export const API_BASE_URL = process.env.NODE_ENV === 'development'
+  ? ""
+  : (process.env.REACT_APP_API_BASE_URL || "https://mushrf.net");
 
 // إعدادات إضافية من البيئة
 export const API_CONFIG = {
@@ -67,50 +70,45 @@ export const apiClient = axios.create({
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
-    ...(API_CONFIG.enableCors && {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, Access-Token, X-Access-Token, x-auth-token, X-User-ID, X-API-Key",
-    }),
   },
   withCredentials: false,
 });
 
 // إضافة اعتراض للطلبات لإضافة رمز المصادقة
 apiClient.interceptors.request.use(
- async (config) => {
+  async (config) => {
     const user = await getItemuseer();
 
     if (user) {
       // دعم طرق مختلفة للـ token حسب ما يرسله الباك اند
-      const token = user.accessToken ;
-      
+      const token = user.accessToken;
+
       if (token && API_CONFIG.enableAuth) {
         // إضافة الـ token في عدة أماكن لضمان التوافق مع الباك اند
         config.headers[API_CONFIG.authHeaderName] = `${API_CONFIG.tokenPrefix} ${token}`;
         config.headers['Access-Token'] = token;
         config.headers['X-Access-Token'] = token;
         config.headers['x-auth-token'] = token;
-        
+
         // إضافة refresh token إذا كان متوفراً
         const refreshToken = user.refreshToken || user.refresh_token;
         if (refreshToken) {
           config.headers['X-Refresh-Token'] = refreshToken;
         }
-        
+
         // إضافة user ID للتتبع
         const userId = user.userId || user.id || user.user_id;
         if (userId) {
           config.headers['X-User-ID'] = userId;
         }
-        
+
         // إضافة API key إذا كان متوفراً
         const apiKey = user.apiKey || user.api_key || user.key;
         if (apiKey) {
           config.headers['X-API-Key'] = apiKey;
           config.headers['API-Key'] = apiKey;
         }
-        
+
         // console.log('🔐 Authentication headers added:', {
         //   hasAccessToken: !!token,
         //   hasRefreshToken: !!refreshToken,
@@ -177,20 +175,20 @@ apiClient.interceptors.response.use(
 
     // التحقق من أخطاء المصادقة
     if (error.response && (
-      error.response.status === 401 || 
+      error.response.status === 401 ||
       error.response.status === 403 ||
       error.response?.data?.message === 'Unauthorized' ||
       error.response?.data?.message === 'Token expired' ||
       error.response?.data?.error === 'invalid_token'
     )) {
       console.warn('🔒 Authentication failed - clearing user data');
-      
+
       // حذف بيانات المستخدم من جميع الأماكن
       // localStorage.removeItem("user");
       // localStorage.removeItem("token");
       // localStorage.removeItem("accessToken");
       // SecureStorage.removeItem("token");
-      
+
       // إعادة توجيه إلى صفحة تسجيل الدخول
       if (window.location.pathname !== '/login') {
         window.location.href = "/login";
@@ -211,17 +209,17 @@ export const authUtils = {
     const token = user?.accessToken || user?.token || user?.access_token;
     return !!token;
   },
-  
+
   getToken: () => {
     const user = getItemuseer();
     return user?.accessToken || user?.token || user?.access_token || null;
   },
-  
+
   getUserId: () => {
     const user = getItemuseer();
     return user?.userId || user?.id || user?.user_id || null;
   },
-  
+
   clearAuth: () => {
     // localStorage.removeItem("user");
     // localStorage.removeItem("token");
@@ -229,7 +227,7 @@ export const authUtils = {
     // SecureStorage.removeItem("token");
     console.log('🔒 Authentication data cleared');
   },
-  
+
   logAuthStatus: () => {
     const user = getItemuseer();
     const token = user?.accessToken || user?.token || user?.access_token;

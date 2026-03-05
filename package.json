@@ -118,5 +118,6 @@
     "storybook": "^7.0.7",
     "typescript": "^5.0.4",
     "webpack": "^5.81.0"
-  }
+  },
+  "proxy": "https://mushrf.net"
 }

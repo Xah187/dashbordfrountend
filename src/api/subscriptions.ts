@@ -66,14 +66,14 @@ export interface SubscriptionFilters {
 // جلب جميع الاشتراكات
 export const fetchSubscriptions = async (filters: SubscriptionFilters = {}) => {
   const queryParams = new URLSearchParams();
-  
+
   if (filters.page) queryParams.append('page', filters.page.toString());
   if (filters.limit) queryParams.append('limit', filters.limit.toString());
   if (filters.search) queryParams.append('search', filters.search);
   if (filters.status) queryParams.append('status', filters.status);
   if (filters.sortBy) queryParams.append('sortBy', filters.sortBy);
   if (filters.sortOrder) queryParams.append('sortOrder', filters.sortOrder);
-  
+
   const url = `/subscriptions${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
   const response = await apiClient.get(url);
   return response.data;
@@ -84,7 +84,7 @@ export const fetchSubscriptionStats = async (): Promise<{ success: boolean; data
   try {
     const response = await apiClient.get('/dashboard/stats');
     const { overview } = response.data.data;
-    
+
     // تحويل البيانات من التنسيق الجديد
     return {
       success: true,
@@ -106,29 +106,29 @@ export const fetchSubscriptionStats = async (): Promise<{ success: boolean; data
 // جلب طلبات تسجيل الشركات المعلقة
 export const fetchPendingSubscriptionRequests = async (): Promise<{ success: boolean; data: SubscriptionRequest[] }> => {
   console.log('🔍 جاري جلب طلبات تسجيل الشركات...');
-  
+
   try {
     const response = await apiClient.get('/company/bringCompanyRegitration', {
       params: { LastID: 0 }
     });
-    
+
     // تحويل البيانات من شكل قاعدة البيانات إلى الشكل المطلوب
-    const transformedData = Array.isArray(response.data.data) 
+    const transformedData = Array.isArray(response.data.data)
       ? response.data.data.map((request: any) => ({
-          id: request.id,
-          companyName: request.NameCompany,
-          contactEmail: request.email || "غير متوفر",
-          contactPhone: request.PhoneNumber,
-          planType: "أساسي",
-          duration: 12, // سنة كاملة
-          requestedCost: 0,
-          notes: "",
-          status: "pending",
-          submittedAt: new Date().toISOString(),
-          city: request.City,
-          country: request.Country,
-          registrationNumber: request.CommercialRegistrationNumber
-        }))
+        id: request.id,
+        companyName: request.NameCompany,
+        contactEmail: request.email || "غير متوفر",
+        contactPhone: request.PhoneNumber,
+        planType: "أساسي",
+        duration: 12, // سنة كاملة
+        requestedCost: 0,
+        notes: "",
+        status: "pending",
+        submittedAt: new Date().toISOString(),
+        city: request.City,
+        country: request.Country,
+        registrationNumber: request.CommercialRegistrationNumber
+      }))
       : [];
 
     console.log('📊 طلبات تسجيل الشركات:', transformedData);
@@ -138,6 +138,36 @@ export const fetchPendingSubscriptionRequests = async (): Promise<{ success: boo
     };
   } catch (error) {
     console.error('❌ خطأ في جلب طلبات تسجيل الشركات:', error);
+    throw error;
+  }
+};
+
+// جلب تفاصيل تتبع العملية
+export const fetchTransactionTracking = async (tranRef: string): Promise<any> => {
+  console.log(`🔍 جاري جلب تفاصيل العملية (رقم: ${tranRef})...`);
+  try {
+    const response = await apiClient.get('/subScription/Process_tracking', {
+      params: { tran_ref: tranRef }
+    });
+    console.log('📊 تفاصيل العملية:', response.data);
+    return response.data?.result || response.data;
+  } catch (error) {
+    console.error('❌ خطأ في جلب تفاصيل العملية:', error);
+    throw error;
+  }
+};
+
+// جلب تقارير الاشتراكات
+export const fetchSubscriptionReports = async (type: number = 1, listId: number = 0): Promise<any> => {
+  console.log(`🔍 جاري جلب تقارير الاشتراكات (النوع: ${type})...`);
+  try {
+    const response = await apiClient.get('/subScription/Bring_all_companyS_subscription', {
+      params: { type, ListID: listId }
+    });
+    console.log('📊 بيانات التقارير:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ خطأ في جلب تقارير الاشتراكات:', error);
     throw error;
   }
 };
@@ -179,7 +209,7 @@ export const approveSubscriptionRequest = async (
   requestId: string
 ): Promise<{ success: boolean; data: any; message: string }> => {
   console.log(`✅ جاري الموافقة على طلب الاشتراك: ${requestId}`);
-  
+
   try {
     const response = await apiClient.get(`/company/AgreedRegistrationCompany?id=${requestId}`);
     console.log('📊 استجابة الموافقة على الطلب:', response.data);
@@ -196,7 +226,7 @@ export const rejectSubscriptionRequest = async (
   reason: string
 ): Promise<{ success: boolean; data: any; message: string }> => {
   console.log(`❌ جاري حذف طلب الاشتراك: ${requestId} - السبب: ${reason}`);
-  
+
   try {
     const response = await apiClient.delete(`/company/DeleteCompanyRegistration?id=${requestId}`);
     console.log('📊 استجابة حذف الطلب:', response.data);
@@ -279,7 +309,7 @@ export const getExpirationPriority = (endDate: string): 'high' | 'medium' | 'low
 export const exportSubscriptionsToExcel = async (filters: SubscriptionFilters = {}) => {
   // جلب جميع الاشتراكات للتصدير
   const allSubscriptions = await fetchSubscriptions({ ...filters, limit: 1000 });
-  
+
   const formattedData = allSubscriptions.data.map((subscription: Subscription) => ({
     'اسم الشركة': subscription.companyName,
     'الباقة': subscription.planName,
@@ -296,7 +326,7 @@ export const exportSubscriptionsToExcel = async (filters: SubscriptionFilters = 
     'التجديد التلقائي': subscription.autoRenew ? 'مفعل' : 'غير مفعل',
     'طريقة الدفع': subscription.paymentMethod
   }));
-  
+
   return formattedData;
 };
 
@@ -402,6 +432,8 @@ export default {
   formatDate,
   getExpirationPriority,
   exportSubscriptionsToExcel,
+  fetchSubscriptionReports,
+  fetchTransactionTracking,
   useSubscriptions,
   useSubscriptionStats
 }; 

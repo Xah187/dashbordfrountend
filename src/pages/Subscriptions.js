@@ -94,7 +94,9 @@ import {
   approveSubscriptionRequest,
   rejectSubscriptionRequest,
   renewSubscription,
-  suspendSubscription
+  suspendSubscription,
+  fetchSubscriptionReports,
+  fetchTransactionTracking
 } from '../api';
 
 // استيراد API أنواع الاشتراكات (التسعيرات)
@@ -102,7 +104,8 @@ import {
   fetchSubscriptionTypes,
   insertSubscriptionType,
   updateSubscriptionType,
-  deleteSubscriptionType
+  deleteSubscriptionType,
+  insertCompanySubscription
 } from '../api/subscriptionTypesApi';
 
 const Subscriptions = () => {
@@ -145,8 +148,19 @@ const Subscriptions = () => {
     severity: 'success'
   });
 
+  // State للتقارير
+  const [reportType, setReportType] = useState(1); // 1 = نشطة, 2 = الكل
+  const [reportsData, setReportsData] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+
+  // State لتتبع العمليات
+  const [tranRefSearch, setTranRefSearch] = useState('');
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingResult, setTrackingResult] = useState(null);
+  const [openTrackingDialog, setOpenTrackingDialog] = useState(false);
+
   // State للتبويبات
-  const [activeTab, setActiveTab] = useState(0); // 0: الاشتراكات، 1: الطلبات المعلقة، 2: الإحصائيات، 3: أنواع الاشتراكات
+  const [activeTab, setActiveTab] = useState(0); // 0: الاشتراكات، 1: الطلبات المعلقة، 2: التقارير، 3: أنواع الاشتراكات
 
   // State لأنواع الاشتراكات (التسعيرات)
   const [subscriptionTypes, setSubscriptionTypes] = useState([]);
@@ -157,11 +171,22 @@ const Subscriptions = () => {
     name: '',
     duration_in_months: '',
     price_per_project: '',
-    discraption: ''
+    discraption: '',
+    product_id: '',
+    condition: ''
   });
   const [openDeleteTypeDialog, setOpenDeleteTypeDialog] = useState(false);
   const [deletingType, setDeletingType] = useState(null);
   const [typeSaving, setTypeSaving] = useState(false);
+
+  // State لإضافة اشتراك لشركة
+  const [newSubFormData, setNewSubFormData] = useState({
+    company_id: '',
+    subscription_type_id: '',
+    project_count: ''
+  });
+  const [newSubSaving, setNewSubSaving] = useState(false);
+  const [newSubResult, setNewSubResult] = useState(null);
 
   // State للتحديث
   const [refreshing, setRefreshing] = useState(false);
@@ -223,6 +248,102 @@ const Subscriptions = () => {
       console.error('❌ Error fetching pending requests with NEW API:', err);
       // التأكد من بقاء المتغير كـ array فارغ في حالة الخطأ
       setPendingRequests([]);
+    }
+  };
+
+  // جلب تقارير الاشتراكات
+  const loadReports = async (type) => {
+    setReportsLoading(true);
+    try {
+      const result = await fetchSubscriptionReports(type);
+      if (result?.data && Array.isArray(result.data)) {
+        setReportsData(result.data);
+      } else if (result && Array.isArray(result)) {
+        setReportsData(result);
+      } else {
+        setReportsData([]);
+      }
+    } catch (err) {
+      console.error('❌ Error fetching reports:', err);
+      // setNotification({ open: true, message: 'فشل في جلب التقارير', severity: 'error' });
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  // جلب معلومات تتبع العملية
+  const loadTransactionTracking = async () => {
+    if (!tranRefSearch.trim()) {
+      setNotification({ open: true, message: 'الرجاء إدخال رقم العملية', severity: 'warning' });
+      return;
+    }
+    setTrackingLoading(true);
+    try {
+      const result = await fetchTransactionTracking(tranRefSearch);
+      // التحقق من وجود خطأ (مثل: Transaction not found)
+      if (result?.code || result?.message?.includes('not found')) {
+        setNotification({ open: true, message: `العملية غير موجودة: ${result.message || 'Transaction not found'}`, severity: 'error' });
+        return;
+      }
+      setTrackingResult(result);
+      setOpenTrackingDialog(true);
+    } catch (err) {
+      console.error('❌ Error fetching transaction tracking:', err);
+      setNotification({ open: true, message: 'فشل في جلب بيانات العملية، يرجى التأكد من الرقم', severity: 'error' });
+    } finally {
+      setTrackingLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 2) {
+      loadReports(reportType);
+    }
+  }, [activeTab, reportType]);
+
+  // جلب أنواع الاشتراكات عند فتح تبويب إضافة اشتراك
+  useEffect(() => {
+    if (activeTab === 4 && subscriptionTypes.length === 0) {
+      loadSubscriptionTypes();
+    }
+  }, [activeTab]);
+
+  // حفظ اشتراك جديد لشركة
+  const handleSaveNewSubscription = async () => {
+    if (!newSubFormData.company_id || isNaN(Number(newSubFormData.company_id))) {
+      setNotification({ open: true, message: 'يرجى إدخال رقم الشركة (Company ID)', severity: 'warning' });
+      return;
+    }
+    if (!newSubFormData.subscription_type_id) {
+      setNotification({ open: true, message: 'يرجى اختيار نوع الاشتراك', severity: 'warning' });
+      return;
+    }
+    if (!newSubFormData.project_count || isNaN(Number(newSubFormData.project_count)) || Number(newSubFormData.project_count) <= 0) {
+      setNotification({ open: true, message: 'يرجى إدخال عدد مشاريع صحيح', severity: 'warning' });
+      return;
+    }
+
+    try {
+      setNewSubSaving(true);
+      const result = await insertCompanySubscription({
+        subscription_type_id: Number(newSubFormData.subscription_type_id),
+        project_count: Number(newSubFormData.project_count),
+        company_id: Number(newSubFormData.company_id)
+      });
+
+      if (result.success === false) {
+        setNotification({ open: true, message: result.message || result.error || 'فشل في إضافة الاشتراك', severity: 'error' });
+        return;
+      }
+
+      setNewSubResult(result);
+      setNotification({ open: true, message: 'تم إضافة الاشتراك بنجاح ✅', severity: 'success' });
+      setNewSubFormData({ company_id: '', subscription_type_id: '', project_count: '' });
+    } catch (err) {
+      console.error('❌ Error creating company subscription:', err);
+      setNotification({ open: true, message: 'خطأ في إضافة الاشتراك: ' + (err.message || ''), severity: 'error' });
+    } finally {
+      setNewSubSaving(false);
     }
   };
 
@@ -294,7 +415,7 @@ const Subscriptions = () => {
   // فتح نافذة إضافة نوع جديد
   const openAddTypeDialog = () => {
     setEditingType(null);
-    setTypeFormData({ name: '', duration_in_months: '', price_per_project: '', discraption: '' });
+    setTypeFormData({ name: '', duration_in_months: '', price_per_project: '', discraption: '', product_id: '', condition: '' });
     setOpenTypeDialog(true);
   };
 
@@ -305,7 +426,9 @@ const Subscriptions = () => {
       name: type.name || '',
       duration_in_months: type.duration_in_months?.toString() || '',
       price_per_project: type.price_per_project?.toString() || '',
-      discraption: type.discraption || ''
+      discraption: type.discraption || '',
+      product_id: type.product_id?.toString() || '',
+      condition: type.condition?.toString() || ''
     });
     setOpenTypeDialog(true);
   };
@@ -324,6 +447,10 @@ const Subscriptions = () => {
       setNotification({ open: true, message: 'يرجى إدخال سعر صحيح لكل مشروع', severity: 'warning' });
       return;
     }
+    if (!editingType && (!typeFormData.product_id || isNaN(Number(typeFormData.product_id)))) {
+      setNotification({ open: true, message: 'يرجى إدخال معرف منتج صحيح', severity: 'warning' });
+      return;
+    }
 
     try {
       setTypeSaving(true);
@@ -331,7 +458,9 @@ const Subscriptions = () => {
         name: typeFormData.name.trim(),
         duration_in_months: Number(typeFormData.duration_in_months),
         price_per_project: Number(typeFormData.price_per_project),
-        discraption: typeFormData.discraption?.trim() || ''
+        discraption: typeFormData.discraption?.trim() || '',
+        product_id: editingType ? undefined : Number(typeFormData.product_id || 0),
+        condition: Number(typeFormData.condition || 0)
       };
 
       if (editingType) {
@@ -829,6 +958,14 @@ const Subscriptions = () => {
                 </Box>
               }
             />
+            <Tab
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <AddIcon />
+                  <span>إضافة اشتراك لشركة</span>
+                </Box>
+              }
+            />
           </Tabs>
 
           {/* أزرار الإجراءات */}
@@ -1173,14 +1310,84 @@ const Subscriptions = () => {
 
           {/* التبويب الثالث: التقارير */}
           {activeTab === 2 && (
-            <Box sx={{ textAlign: 'center', py: 6 }}>
-              <AssessmentIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-              <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 2 }}>
-                التقارير قيد التطوير
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                سيتم إضافة التقارير التفصيلية قريباً
-              </Typography>
+            <Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  تقارير الشركات المشتركة
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <TextField
+                      size="small"
+                      label="رقم العملية (tran_ref)"
+                      value={tranRefSearch}
+                      onChange={(e) => setTranRefSearch(e.target.value)}
+                      sx={{ minWidth: 200 }}
+                    />
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={loadTransactionTracking}
+                      disabled={trackingLoading || !tranRefSearch.trim()}
+                      startIcon={trackingLoading ? <CircularProgress size={20} /> : <SearchIcon />}
+                    >
+                      بحث
+                    </Button>
+                  </Box>
+                  <FormControl variant="outlined" size="small" sx={{ minWidth: 200 }}>
+                    <InputLabel>نوع التقرير</InputLabel>
+                    <Select
+                      value={reportType}
+                      onChange={(e) => setReportType(e.target.value)}
+                      label="نوع التقرير"
+                    >
+                      <MenuItem value={1}>الباقات المفعلة</MenuItem>
+                      <MenuItem value={2}>كل الباقات</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Box>
+              </Box>
+
+              {reportsLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                  <CircularProgress />
+                </Box>
+              ) : reportsData?.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 6 }}>
+                  <AssessmentIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 2 }}>
+                    لا توجد بيانات
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    لم يتم العثور على تقارير بناءً على النوع المحدد
+                  </Typography>
+                </Box>
+              ) : (
+                <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflowX: 'auto' }}>
+                  <Table size="small" sx={{ minWidth: 1200 }}>
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: 'grey.50' }}>
+                        {Object.keys(reportsData[0]).map((key) => (
+                          <TableCell key={key} sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
+                            {key}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {reportsData.map((row, index) => (
+                        <TableRow key={index} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
+                          {Object.values(row).map((val, i) => (
+                            <TableCell key={i} sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                              {String(val ?? '—')}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
             </Box>
           )}
 
@@ -1228,7 +1435,9 @@ const Subscriptions = () => {
                         <TableCell sx={{ fontWeight: 'bold', fontSize: '0.95rem' }}>المدة (أشهر)</TableCell>
                         <TableCell sx={{ fontWeight: 'bold', fontSize: '0.95rem' }}>السعر لكل مشروع (ر.س)</TableCell>
                         <TableCell sx={{ fontWeight: 'bold', fontSize: '0.95rem' }}>الوصف</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.95rem' }}>الإجراءات</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>معرف المنتج (Product ID)</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>رقم الشرط (Condition)</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 'bold' }}>الإجراءات</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1262,6 +1471,10 @@ const Subscriptions = () => {
                             </Typography>
                           </TableCell>
                           <TableCell>
+                            <Chip size="small" label={type.product_id || 'غير محدد'} variant="outlined" />
+                          </TableCell>
+                          <TableCell>{type.condition || '—'}</TableCell>
+                          <TableCell align="center">
                             <Box sx={{ display: 'flex', gap: 0.5 }}>
                               <Tooltip title="تعديل">
                                 <IconButton size="small" color="primary" onClick={() => openEditTypeDialog(type)}>
@@ -1284,6 +1497,130 @@ const Subscriptions = () => {
                     </TableBody>
                   </Table>
                 </TableContainer>
+              )}
+            </>
+          )}
+
+          {/* التبويب الخامس: إضافة اشتراك لشركة */}
+          {activeTab === 4 && (
+            <>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  إضافة اشتراك جديد لشركة
+                </Typography>
+              </Box>
+
+              <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 3, mb: 3 }}>
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="رقم الشركة (Company ID)"
+                      type="number"
+                      variant="outlined"
+                      value={newSubFormData.company_id}
+                      onChange={(e) => setNewSubFormData({ ...newSubFormData, company_id: e.target.value })}
+                      inputProps={{ min: 1 }}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <FormControl fullWidth variant="outlined">
+                      <InputLabel>نوع الاشتراك (الباقة)</InputLabel>
+                      <Select
+                        value={newSubFormData.subscription_type_id}
+                        onChange={(e) => setNewSubFormData({ ...newSubFormData, subscription_type_id: e.target.value })}
+                        label="نوع الاشتراك (الباقة)"
+                      >
+                        {subscriptionTypes.map((type) => (
+                          <MenuItem key={type.id} value={type.id}>
+                            {type.name} — {type.duration_in_months} شهر — {Number(type.price_per_project).toLocaleString('en-GB')} ر.س/مشروع
+                            {type.condition > 0 ? ` (حد أدنى: ${type.condition} مشروع)` : ''}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="عدد المشاريع"
+                      type="number"
+                      variant="outlined"
+                      value={newSubFormData.project_count}
+                      onChange={(e) => setNewSubFormData({ ...newSubFormData, project_count: e.target.value })}
+                      inputProps={{ min: 1 }}
+                    />
+                  </Grid>
+
+                  {/* عرض السعر المتوقع */}
+                  {newSubFormData.subscription_type_id && newSubFormData.project_count && (
+                    <Grid item xs={12}>
+                      <Alert severity="info" sx={{ borderRadius: 2 }}>
+                        {(() => {
+                          const selectedType = subscriptionTypes.find(t => t.id == newSubFormData.subscription_type_id);
+                          if (!selectedType) return 'لم يتم العثور على نوع الاشتراك';
+                          const count = Number(newSubFormData.project_count);
+                          const price = count * selectedType.price_per_project * selectedType.duration_in_months;
+                          const vat = price * 15 / 100;
+                          const total = price + vat;
+                          return (
+                            <>
+                              <Typography variant="body2">
+                                <strong>الباقة:</strong> {selectedType.name} | <strong>المدة:</strong> {selectedType.duration_in_months} شهر | <strong>السعر للمشروع:</strong> {Number(selectedType.price_per_project).toLocaleString('en-GB')} ر.س
+                              </Typography>
+                              <Typography variant="body2">
+                                <strong>السعر قبل الضريبة:</strong> {price.toLocaleString('en-GB')} ر.س | <strong>ضريبة (15%):</strong> {vat.toLocaleString('en-GB')} ر.س | <strong>الإجمالي:</strong> {total.toLocaleString('en-GB')} ر.س
+                              </Typography>
+                              {selectedType.condition > 0 && count < selectedType.condition && (
+                                <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+                                  ⚠️ الحد الأدنى لعدد المشاريع: {selectedType.condition}
+                                </Typography>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </Alert>
+                    </Grid>
+                  )}
+
+                  <Grid item xs={12}>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      size="large"
+                      startIcon={newSubSaving ? <CircularProgress size={20} color="inherit" /> : <AddIcon />}
+                      onClick={handleSaveNewSubscription}
+                      disabled={newSubSaving}
+                      sx={{ borderRadius: 2, px: 4 }}
+                    >
+                      {newSubSaving ? 'جاري الإنشاء...' : 'إنشاء الاشتراك'}
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              {/* عرض نتيجة آخر عملية إنشاء */}
+              {newSubResult && newSubResult.code_subscription && (
+                <Alert severity="success" sx={{ borderRadius: 2 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                    ✅ تم إنشاء الاشتراك بنجاح
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>كود الاشتراك:</strong> {newSubResult.code_subscription?.code_subscription || newSubResult.code_subscription}
+                  </Typography>
+                  {newSubResult.code_subscription?.price && (
+                    <Typography variant="body2">
+                      <strong>الإجمالي:</strong> {Number(newSubResult.code_subscription.price).toLocaleString('en-GB')} ر.س
+                    </Typography>
+                  )}
+                  {newSubResult.code_subscription?.NameCompany && (
+                    <Typography variant="body2">
+                      <strong>الشركة:</strong> {newSubResult.code_subscription.NameCompany}
+                    </Typography>
+                  )}
+                </Alert>
               )}
             </>
           )}
@@ -1481,6 +1818,17 @@ const Subscriptions = () => {
               placeholder="مثال: 115"
               InputProps={{ inputProps: { min: 0, step: 0.01 } }}
             />
+            {!editingType && (
+              <TextField
+                fullWidth
+                label="معرف المنتج Product ID"
+                type="number"
+                value={typeFormData.product_id}
+                onChange={(e) => setTypeFormData({ ...typeFormData, product_id: e.target.value })}
+                required
+                placeholder="مثال: 919"
+              />
+            )}
             <TextField
               fullWidth
               label="الوصف (اختياري)"
@@ -1529,6 +1877,111 @@ const Subscriptions = () => {
             {typeSaving ? 'جاري الحذف...' : 'حذف'}
           </Button>
         </DialogActions>
+      </Dialog>      {/* حوار عرض تفاصيل العملية */}
+      <Dialog open={openTrackingDialog} onClose={() => setOpenTrackingDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          تفاصيل تتبع العملية
+          {trackingResult?.payment_result?.response_status && (
+            <Chip
+              label={trackingResult.payment_result.response_status === 'A' ? 'مدفوعة ✅' : 'مرفوضة ❌'}
+              color={trackingResult.payment_result.response_status === 'A' ? 'success' : 'error'}
+              size="medium"
+              sx={{ fontWeight: 'bold' }}
+            />
+          )}
+        </DialogTitle>
+        <DialogContent dividers>
+          {trackingResult ? (
+            <Grid container spacing={3}>
+              {/* المعلومات الأساسية */}
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
+                  المعلومات الأساسية
+                </Typography>
+                <Typography variant="body2"><strong>رقم العملية (Ref):</strong> {trackingResult.tran_ref || '—'}</Typography>
+                <Typography variant="body2"><strong>نوع العملية:</strong> {trackingResult.tran_type || '—'}</Typography>
+                <Typography variant="body2"><strong>رقم السلة:</strong> {trackingResult.cart_id || '—'}</Typography>
+                <Typography variant="body2"><strong>الوصف:</strong> {trackingResult.cart_description || '—'}</Typography>
+                <Divider sx={{ my: 1 }} />
+                <Typography variant="body2"><strong>مبلغ السلة:</strong> {trackingResult.cart_amount || '—'} {trackingResult.cart_currency || ''}</Typography>
+                <Typography variant="body2"><strong>المبلغ الإجمالي:</strong> {trackingResult.tran_total || '—'} {trackingResult.tran_currency || ''}</Typography>
+              </Grid>
+
+              {/* نتيجة الدفع */}
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
+                  نتيجة الدفع
+                </Typography>
+                <Box sx={{ mb: 1 }}>
+                  <Chip
+                    label={trackingResult.payment_result?.response_message || '—'}
+                    color={trackingResult.payment_result?.response_status === 'A' ? 'success' : 'error'}
+                    size="small"
+                  />
+                </Box>
+                <Typography variant="body2"><strong>كود الاستجابة:</strong> {trackingResult.payment_result?.response_code || '—'}</Typography>
+                <Typography variant="body2"><strong>رسالة البنك:</strong> {trackingResult.payment_result?.acquirer_message || '—'}</Typography>
+                <Typography variant="body2"><strong>رقم مرجع البنك (RRN):</strong> {trackingResult.payment_result?.acquirer_rrn || '—'}</Typography>
+                <Typography variant="body2"><strong>وقت العملية:</strong> {trackingResult.payment_result?.transaction_time ? new Date(trackingResult.payment_result.transaction_time).toLocaleString('ar-SA') : '—'}</Typography>
+              </Grid>
+
+              {/* تفاصيل العميل */}
+              {trackingResult.customer_details && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" fontWeight="bold" color="primary" sx={{ mt: 1 }} gutterBottom>
+                    تفاصيل العميل
+                  </Typography>
+                  <Typography variant="body2"><strong>الاسم:</strong> {trackingResult.customer_details.name || '—'}</Typography>
+                  <Typography variant="body2"><strong>البريد الإلكتروني:</strong> {trackingResult.customer_details.email || '—'}</Typography>
+                  <Typography variant="body2"><strong>الهاتف:</strong> {trackingResult.customer_details.phone || '—'}</Typography>
+                  <Typography variant="body2"><strong>العنوان:</strong> {trackingResult.customer_details.street1 || '—'}</Typography>
+                  <Typography variant="body2"><strong>المدينة:</strong> {trackingResult.customer_details.city || '—'}</Typography>
+                  <Typography variant="body2"><strong>المنطقة:</strong> {trackingResult.customer_details.state || '—'}</Typography>
+                  <Typography variant="body2"><strong>الدولة:</strong> {trackingResult.customer_details.country || '—'}</Typography>
+                  <Typography variant="body2"><strong>الرمز البريدي:</strong> {trackingResult.customer_details.zip || '—'}</Typography>
+                  <Typography variant="body2"><strong>عنوان IP:</strong> {trackingResult.customer_details.ip || '—'}</Typography>
+                </Grid>
+              )}
+
+              {/* معلومات الدفع */}
+              {trackingResult.payment_info && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" fontWeight="bold" color="primary" sx={{ mt: 1 }} gutterBottom>
+                    معلومات الدفع
+                  </Typography>
+                  <Typography variant="body2"><strong>وسيلة الدفع:</strong> {trackingResult.payment_info.payment_method || '—'}</Typography>
+                  <Typography variant="body2"><strong>نوع البطاقة:</strong> {trackingResult.payment_info.card_type || '—'} - {trackingResult.payment_info.card_scheme || '—'}</Typography>
+                  <Typography variant="body2"><strong>وصف البطاقة:</strong> {trackingResult.payment_info.payment_description || '—'}</Typography>
+                  <Typography variant="body2"><strong>تاريخ الانتهاء:</strong> {trackingResult.payment_info.expiryMonth || '—'}/{trackingResult.payment_info.expiryYear || '—'}</Typography>
+                  <Typography variant="body2"><strong>دولة المصدر:</strong> {trackingResult.payment_info.issuerCountry || '—'}</Typography>
+                  <Typography variant="body2"><strong>البنك المصدر:</strong> {trackingResult.payment_info.issuerName || '—'}</Typography>
+                </Grid>
+              )}
+
+              {/* معلومات إضافية */}
+              <Grid item xs={12}>
+                <Divider sx={{ my: 1 }} />
+                <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
+                  معلومات إضافية
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                  <Typography variant="body2"><strong>قناة الدفع:</strong> {trackingResult.paymentChannel || '—'}</Typography>
+                  <Typography variant="body2"><strong>رقم الخدمة:</strong> {trackingResult.serviceId || '—'}</Typography>
+                  <Typography variant="body2"><strong>رقم الملف التجاري:</strong> {trackingResult.profileId || '—'}</Typography>
+                  <Typography variant="body2"><strong>رقم التاجر:</strong> {trackingResult.merchantId || '—'}</Typography>
+                  <Typography variant="body2"><strong>Trace:</strong> {trackingResult.trace || '—'}</Typography>
+                </Box>
+              </Grid>
+            </Grid>
+          ) : (
+            <Typography variant="body1" color="text.secondary" align="center">لا توجد تفاصيل عرض متوفرة لهذه العملية.</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenTrackingDialog(false)} variant="contained" color="primary">
+            إغلاق
+          </Button>
+        </DialogActions>
       </Dialog>
 
       {/* إشعار */}
@@ -1545,7 +1998,7 @@ const Subscriptions = () => {
           {notification.message}
         </Alert>
       </Snackbar>
-    </Box>
+    </Box >
   );
 };
 

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import SecureStorage from '../utils/secureStorage';
 import Logger from '../utils/logger';
+import { API_BASE_URL } from './config';
 
 // تعريف واجهة محلية لـ QueryClient بدلاً من استيراد المكتبة
 
@@ -43,12 +44,12 @@ class QueryClient {
   public mutationDefaults: any = {};
   public mountCount: number = 0;
   public unsubscribeCount: number = 0;
-  public focusManager: any = { subscribe: () => () => {} };
-  public onlineManager: any = { subscribe: () => () => {} };
-  public broadcastChannel: any = { postMessage: () => {}, close: () => {} };
-  public devTools: any = { disconnect: () => {} };
+  public focusManager: any = { subscribe: () => () => { } };
+  public onlineManager: any = { subscribe: () => () => { } };
+  public broadcastChannel: any = { postMessage: () => { }, close: () => { } };
+  public devTools: any = { disconnect: () => { } };
   public uids: number[] = [];
-  
+
   constructor(config: QueryClientConfig = {}) {
     this.defaultOptions = config.defaultOptions || {};
   }
@@ -57,19 +58,19 @@ class QueryClient {
   public mount(): void {
     this.mountCount++;
   }
-  
+
   public unmount(): void {
     this.mountCount--;
   }
-  
+
   public isFetching(): number {
     return 0;
   }
-  
+
   public isMutating(): number {
     return 0;
   }
-  
+
   public clear(): void {
     Logger.info('تم مسح ذاكرة التخزين المؤقت');
     this.queryCache = {};
@@ -81,109 +82,109 @@ class QueryClient {
     Logger.info('تم إبطال الاستعلامات', filters?.queryKey);
     return Promise.resolve();
   }
-  
+
   public ensureQueryData(options: any): Promise<any> {
     return Promise.resolve(null);
   }
-  
+
   public getQueryState(queryKey: any): any {
     return null;
   }
-  
+
   public resumePausedMutations(): Promise<any> {
     return Promise.resolve();
   }
-  
+
   public getLogger(): any {
     return this.logger;
   }
-  
+
   public getQueryData(queryKey?: any): any {
     return null;
   }
-  
+
   public setQueryData(queryKey: any, updater: any): any {
     return null;
   }
-  
+
   public getQueriesData(): any[] {
     return [];
   }
-  
+
   public setQueriesData(): any {
     return null;
   }
-  
+
   public getDefaultOptions(): QueryClientConfig['defaultOptions'] {
     return this.defaultOptions;
   }
-  
+
   public resetQueries(): Promise<void> {
     return Promise.resolve();
   }
-  
+
   public refetchQueries(): Promise<void> {
     return Promise.resolve();
   }
-  
+
   public removeQueries(): void {
     // No-op
   }
-  
+
   public cancelQueries(): Promise<void> {
     return Promise.resolve();
   }
-  
+
   public fetchQuery(): Promise<any> {
     return Promise.resolve(null);
   }
-  
+
   public prefetchQuery(): Promise<any> {
     return Promise.resolve(null);
   }
-  
+
   public fetchInfiniteQuery(): Promise<any> {
     return Promise.resolve(null);
   }
-  
+
   public prefetchInfiniteQuery(): Promise<any> {
     return Promise.resolve(null);
   }
-  
+
   // طرق إدارة الطلبات التعديلية
   public executeMutation(): Promise<any> {
     return Promise.resolve(null);
   }
-  
+
   public getMutationCache(): any {
     return this.mutationCache;
   }
-  
+
   public getQueryCache(): any {
     return this.queryCache;
   }
-  
+
   public getMutationDefaults(): any {
     return null;
   }
-  
+
   public getQueryDefaults(): any {
     return null;
   }
-  
+
   public setMutationDefaults(): void {
     // No-op
   }
-  
+
   public setQueryDefaults(): void {
     // No-op
   }
-  
+
   // طرق الاشتراك والانتظار
   public suspense = false;
-  
+
   public fetchStatus = 'idle';
-  
+
   public get fetch() {
     return {
       loading: false,
@@ -191,25 +192,25 @@ class QueryClient {
       data: null,
     };
   }
-  
+
   // معلومات إضافية مطلوبة
   public isRestoring = false;
-  
+
   public setTimeout = (callback: () => void, ms: number) => window.setTimeout(callback, ms);
   public clearTimeout = (timeout: number) => window.clearTimeout(timeout);
-  
+
   // طرق المقارنة والتجميع
   public hashQueryKey(queryKey: any): string {
     return JSON.stringify(queryKey);
   }
-  
+
   public getResolvedQueryDefaults(queryKey: any): any {
     return {};
   }
 }
 
 // إعداد axios للتعامل مع تكوين معياري
-axios.defaults.baseURL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+axios.defaults.baseURL = API_BASE_URL;
 
 // إضافة اعتراض للطلبات لإضافة رمز المصادقة
 axios.interceptors.request.use(
@@ -258,7 +259,7 @@ export const getErrorMessage = (error: unknown): string => {
     // استخراج رسالة الخطأ من خطأ Axios
     return error.response?.data?.message || error.message || 'حدث خطأ في الاتصال بالخادم';
   }
-  
+
   // خطأ غير متوقع
   return error instanceof Error ? error.message : 'حدث خطأ غير متوقع';
 };
