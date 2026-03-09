@@ -84,7 +84,7 @@ import { useTheme } from '@mui/material/styles';
 
 
 // استيراد APIs الجديدة المفعلة لأنشطة تسجيل الدخول
-import { 
+import {
   fetchAllLoginActivities,
   fetchLoginActivityStats,
   searchLoginActivityByCode,
@@ -97,21 +97,21 @@ import { getSoftStatusChipSx } from '../utils/colorUtils';
 
 const LoginActivity = () => {
   const theme = useTheme();
-  
+
   // State للبيانات
   const [loginActivities, setLoginActivities] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedActivity, setSelectedActivity] = useState(null);
-  
+
   // State للبحث والفلترة
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCompany, setFilterCompany] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [sortBy, setSortBy] = useState('DateOFlogin');
   const [sortOrder, setSortOrder] = useState('DESC');
-  
+
   // State للـ pagination مع فلترة يومية
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10); // ثابت على 10 عناصر
@@ -119,23 +119,23 @@ const LoginActivity = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [allLoginActivities, setAllLoginActivities] = useState([]); // جميع البيانات
   const [dailyFilteredActivities, setDailyFilteredActivities] = useState([]); // البيانات المفلترة يومياً
-  
+
   // State للحوارات
   const [openDetailsDialog, setOpenDetailsDialog] = useState(false);
   const [openCodeSearchDialog, setOpenCodeSearchDialog] = useState(false);
   const [codeSearchQuery, setCodeSearchQuery] = useState('');
   const [codeSearchResult, setCodeSearchResult] = useState(null);
-  
+
   // State للإشعارات
   const [notification, setNotification] = useState({
     open: false,
     message: '',
     severity: 'success'
   });
-  
+
   // State للتبويبات
   const [activeTab, setActiveTab] = useState(0); // 0: الأنشطة، 1: الإحصائيات
-  
+
   // State للتحديث
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
@@ -146,7 +146,7 @@ const LoginActivity = () => {
     const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-    
+
     return activities.filter(activity => {
       if (!activity.DateOFlogin) return false;
       const activityDate = new Date(activity.DateOFlogin);
@@ -158,38 +158,38 @@ const LoginActivity = () => {
   const fetchAllActivitiesAndFilter = async () => {
     try {
       setLoading(true);
-      
+
       let allActivities = [];
       let hasMoreData = true;
       let currentNumber = 0;
-      
+
       // جلب جميع البيانات من الباك اند
       while (hasMoreData) {
         const result = await fetchAllLoginActivities({
           number: currentNumber
         });
-        
+
         const activities = Array.isArray(result.activities) ? result.activities : [];
-        
+
         if (activities.length === 0) {
           hasMoreData = false;
         } else {
           allActivities = [...allActivities, ...activities];
           currentNumber = Math.max(...activities.map(a => a.id || 0));
-          
+
           // إذا جلبنا أقل من 10 عناصر، فهذا يعني أننا وصلنا للنهاية
           if (activities.length < 10) {
             hasMoreData = false;
           }
         }
       }
-      
+
       // تحديث جميع البيانات
       setAllLoginActivities(allActivities);
-      
+
       // فلترة البيانات للحصول على اليوم الحالي فقط
       const todayActivities = filterDailyActivities(allActivities);
-      
+
       // تحديث البيانات المفلترة وإعادة حساب pagination
       setDailyFilteredActivities(todayActivities);
       applyPagination(todayActivities);
@@ -208,8 +208,8 @@ const LoginActivity = () => {
           if (d >= weekAgo) weekCount++;
         }
         setStats(prev => ({ ...prev, todayLogins: todayCount, weekLogins: weekCount }));
-      } catch {}
-      
+      } catch { }
+
     } catch (err) {
       console.error('❌ Error fetching login activities:', err);
       setError(err.message);
@@ -232,12 +232,12 @@ const LoginActivity = () => {
     const startIndex = (pageNumber - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const pageData = filteredData.slice(startIndex, endIndex);
-    
+
     setLoginActivities(pageData);
     setTotalItems(totalFiltered);
     setTotalPages(totalPagesCalculated);
     setCurrentPage(pageNumber);
-    
+
 
   };
 
@@ -245,9 +245,9 @@ const LoginActivity = () => {
   const fetchStats = async () => {
     try {
       const statsData = await fetchLoginActivityStats();
-      
+
       setStats(statsData || {});
-      
+
     } catch (err) {
       console.error('❌ Error fetching login activity stats with NEW API:', err);
       showNotification('خطأ في جلب الإحصائيات: ' + err.message, 'error');
@@ -266,12 +266,12 @@ const LoginActivity = () => {
     try {
       setLoading(true);
       console.log(`🔍 البحث عن كود التحقق: ${codeSearchQuery} باستخدام API الجديد...`);
-      
+
       const result = await searchLoginActivityByCode(codeSearchQuery);
-      
+
       setCodeSearchResult(result);
       showNotification('تم العثور على المستخدم بنجاح', 'success');
-      
+
     } catch (err) {
       console.error('❌ Error searching by code with NEW API:', err);
       setCodeSearchResult(null);
@@ -315,30 +315,30 @@ const LoginActivity = () => {
   // التعامل مع تغيير الصفحة
   const handlePageChange = (event, pageNumber) => {
     if (pageNumber === currentPage) return;
-    
+
     // تطبيق pagination على البيانات المفلترة حالياً
     let currentFilteredData = dailyFilteredActivities;
-    
+
     // تطبيق الفلاتر المحلية إذا وجدت
     if (searchQuery || filterCompany || filterStatus) {
       currentFilteredData = applyLocalFilters(dailyFilteredActivities);
     }
-    
+
     applyPagination(currentFilteredData, pageNumber);
   };
 
   // تطبيق الفلاتر المحلية (البحث والشركة والحالة)
   const applyLocalFilters = (activities) => {
     return activities.filter(activity => {
-      const matchesSearch = !searchQuery || 
+      const matchesSearch = !searchQuery ||
         activity.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         activity.IDNumber?.toString().includes(searchQuery) ||
         activity.PhoneNumber?.includes(searchQuery) ||
         activity.job?.toLowerCase().includes(searchQuery.toLowerCase());
-      
+
       const matchesCompany = !filterCompany || activity.IDCompany?.toString() === filterCompany;
       const matchesStatus = !filterStatus || activity.Activation === filterStatus;
-      
+
       return matchesSearch && matchesCompany && matchesStatus;
     });
   };
@@ -376,10 +376,10 @@ const LoginActivity = () => {
   const formatDate = (dateString) => {
     if (!dateString) return 'غير محدد';
     const date = new Date(dateString);
-    
+
     // تحقق من وجود وقت في البيانات
     const hasTime = date.getHours() !== 0 || date.getMinutes() !== 0 || date.getSeconds() !== 0;
-    
+
     if (hasTime) {
       return date.toLocaleDateString('en-GB', {
         year: 'numeric',
@@ -421,7 +421,7 @@ const LoginActivity = () => {
     if (searchQuery || filterCompany || filterStatus) {
       // تطبيق الفلاتر المحلية على البيانات اليومية
       const filteredData = applyLocalFilters(dailyFilteredActivities);
-      
+
       // العودة للصفحة الأولى وتطبيق pagination
       applyPagination(filteredData, 1);
     } else if (dailyFilteredActivities.length > 0) {
@@ -439,9 +439,9 @@ const LoginActivity = () => {
             أنشطة تسجيل الدخول
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <CircularProgress 
-              size={20} 
-              sx={{ 
+            <CircularProgress
+              size={20}
+              sx={{
                 color: isAutoRefreshing ? 'success.main' : 'action.disabled',
                 animation: isAutoRefreshing ? 'pulse 1s infinite' : 'none',
                 '@keyframes pulse': {
@@ -449,7 +449,7 @@ const LoginActivity = () => {
                   '50%': { opacity: 0.5 },
                   '100%': { opacity: 1 }
                 }
-              }} 
+              }}
             />
             <Typography variant="body2" color="text.secondary">
               تحديث تلقائي (25 ثانية)
@@ -460,7 +460,7 @@ const LoginActivity = () => {
           إدارة ومراقبة أنشطة تسجيل الدخول وأكواد التحقق للمستخدمين
         </Typography>
         <Typography variant="body2" color="text.disabled">
-                        آخر تحديث: {lastRefreshTime.toLocaleString('en-GB')}
+          آخر تحديث: {lastRefreshTime.toLocaleString('en-GB')}
         </Typography>
       </Box>
 
@@ -474,14 +474,14 @@ const LoginActivity = () => {
           allowScrollButtonsMobile
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
-          <Tab 
-            icon={<LoginIcon />} 
-            label="الأنشطة" 
+          <Tab
+            icon={<LoginIcon />}
+            label="الأنشطة"
             sx={{ minHeight: 60 }}
           />
-          <Tab 
-            icon={<AssessmentIcon />} 
-            label="الإحصائيات" 
+          <Tab
+            icon={<AssessmentIcon />}
+            label="الإحصائيات"
             sx={{ minHeight: 60 }}
           />
         </Tabs>
@@ -568,9 +568,9 @@ const LoginActivity = () => {
                 <Grid item xs={12} md={2}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '56px' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <CircularProgress 
-                        size={20} 
-                        sx={{ 
+                      <CircularProgress
+                        size={20}
+                        sx={{
                           color: isAutoRefreshing ? 'success.main' : 'action.disabled',
                           animation: isAutoRefreshing ? 'pulse 1s infinite' : 'none',
                           '@keyframes pulse': {
@@ -578,7 +578,7 @@ const LoginActivity = () => {
                             '50%': { opacity: 0.5 },
                             '100%': { opacity: 1 }
                           }
-                        }} 
+                        }}
                       />
                       <Typography variant="body2" color="text.secondary">
                         تحديث تلقائي
@@ -587,7 +587,7 @@ const LoginActivity = () => {
                   </Box>
                 </Grid>
               </Grid>
-              
+
               <Box sx={{ mt: 1, textAlign: 'right' }}>
                 <Typography variant="body2" color="text.secondary">
                   تسجيلات اليوم: {totalItems}
@@ -600,9 +600,9 @@ const LoginActivity = () => {
           <Card>
             <CardContent>
               <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
-                <Table 
-                  size="small" 
-                  sx={{ 
+                <Table
+                  size="small"
+                  sx={{
                     minWidth: { xs: 650, md: 900 },
                     '& th, & td': { whiteSpace: 'nowrap', fontSize: { xs: '0.8rem', sm: '0.9rem' }, py: { xs: 0.75, sm: 1 } }
                   }}
@@ -624,7 +624,7 @@ const LoginActivity = () => {
                       <TableRow key={activity.id}>
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <Avatar 
+                            <Avatar
                               src={activity.image}
                               sx={{ width: { xs: 28, sm: 40 }, height: { xs: 28, sm: 40 }, mr: 2 }}
                             >
@@ -716,7 +716,7 @@ const LoginActivity = () => {
                     showFirstButton
                     showLastButton
                     disabled={loading}
-                    sx={{ 
+                    sx={{
                       '& .MuiPaginationItem-root': {
                         fontSize: '1rem',
                         fontWeight: 'bold'
@@ -725,7 +725,7 @@ const LoginActivity = () => {
                   />
                 )}
               </Box>
-              
+
               {/* Empty State Message */}
               {loginActivities.length === 0 && !loading && (
                 <Box sx={{ mt: 3, textAlign: 'center' }}>
@@ -958,7 +958,7 @@ const LoginActivity = () => {
             onChange={(e) => setCodeSearchQuery(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && searchByCode()}
           />
-          
+
           {codeSearchResult && (
             <Box sx={{ mt: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
               <Typography variant="h6" gutterBottom>

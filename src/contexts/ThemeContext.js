@@ -22,7 +22,7 @@ export const ThemeProvider = ({ children }) => {
     try {
       // محاولة استرجاع الإعدادات من التخزين المحلي
       const savedSettings = localStorage.getItem('themeSettings');
-      
+
       if (savedSettings) {
         try {
           const parsedSettings = JSON.parse(savedSettings);
@@ -34,7 +34,7 @@ export const ThemeProvider = ({ children }) => {
     } catch (error) {
       console.error('خطأ في استرجاع إعدادات السمة:', error);
     }
-    
+
     return defaultSettings;
   });
 
@@ -48,15 +48,15 @@ export const ThemeProvider = ({ children }) => {
     } catch (error) {
       console.error('خطأ في استرجاع وضع الألوان الداكنة:', error);
     }
-    
+
     return false; // وضع الألوان الفاتحة افتراضياً
   });
-  
+
   // تطبيق الإعدادات المطلوبة عند بدء التشغيل
   useEffect(() => {
     // للتأكد من أن الإعدادات تُطبَق بشكل صحيح
   }, []);
-  
+
   // التأكد من تطبيق التغييرات في الإعدادات
   useEffect(() => {
     // هذه الوظيفة ستشغل في كل مرة تتغير فيها الإعدادات
@@ -76,29 +76,29 @@ export const ThemeProvider = ({ children }) => {
     try {
       // تمييز الإعدادات بختم زمني لضمان التحديث
       const timestamp = new Date().getTime();
-      
+
       // استخدام الإعدادات التي اختارها المستخدم
-      const updatedSettings = { 
-        ...settings, 
+      const updatedSettings = {
+        ...settings,
         ...newSettings,
         lastUpdated: timestamp // إضافة ختم زمني
       };
-      
+
       // تطبيق التغييرات على state أولاً
       setSettings(updatedSettings);
-      
+
       // ثم حفظ الإعدادات في التخزين المحلي
       localStorage.setItem('themeSettings', JSON.stringify(updatedSettings));
-      
+
       // إذا تم تغيير وضع الألوان الداكنة، قم بتحديثه أيضًا
       if (newSettings.hasOwnProperty('darkMode') && newSettings.darkMode !== darkMode) {
         localStorage.setItem('darkMode', newSettings.darkMode);
         setDarkMode(newSettings.darkMode);
       }
-      
+
       // إرجاع القيم المحدثة للاستخدام اللاحق
       return updatedSettings;
-      
+
     } catch (error) {
       console.error('خطأ في تحديث إعدادات السمة:', error);
       return settings;
@@ -136,7 +136,7 @@ export const ThemeProvider = ({ children }) => {
     };
     return sizes[size] || sizes.medium;
   };
-  
+
   // وظيفة لاسترجاع قيم التباين المرتفع
   const getHighContrastValues = () => {
     return {
@@ -166,7 +166,10 @@ export const ThemeProvider = ({ children }) => {
     return createTheme({
       palette: {
         mode: darkMode ? 'dark' : 'light',
-        primary: { main: primaryMain },
+        primary: {
+          main: primaryMain,
+          contrastText: '#ffffff'
+        },
       },
       shape: {
         borderRadius: radiusNumber,

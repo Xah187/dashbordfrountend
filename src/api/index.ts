@@ -80,7 +80,8 @@ export {
 export {
   fetchPendingSubscriptionRequests,
   approveSubscriptionRequest,
-  rejectSubscriptionRequest
+  rejectSubscriptionRequest,
+  fetchInvoiceUrl
 } from './subscriptions';
 
 export {
@@ -93,18 +94,18 @@ export const API_ENDPOINTS = {
   // Dashboard
   DASHBOARD_STATS: '/api/dashboard/stats',
   DASHBOARD_REPORTS: '/api/dashboard/reports',
-  
+
   // Login Activity
   LOGIN_ACTIVITY: '/api/login-activity',
   LOGIN_ACTIVITY_STATS: '/api/login-activity/stats/summary',
-  
+
   // Stage Templates
   STAGE_TEMPLATES: '/api/stage-templates',
   STAGE_TEMPLATE_CATEGORIES: '/api/stage-templates/categories',
-  
+
   // Subscriptions
   PENDING_SUBSCRIPTION_REQUESTS: '/api/subscriptions/pending-requests',
-  
+
   // Advanced Company
   COMPANY_DETAILS: '/api/companies/:id/details',
   BRANCH_EMPLOYEES_STATS: '/api/companies/branches/:branchId/employees/stats'
@@ -155,7 +156,7 @@ export const getSystemInfo = () => {
   return {
     activatedApis: [
       'Dashboard APIs',
-      'Stage Templates APIs', 
+      'Stage Templates APIs',
       'Login Activity APIs',
       'Pending Subscription Requests APIs',
       'Advanced Company APIs'

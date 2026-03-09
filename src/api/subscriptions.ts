@@ -157,6 +157,21 @@ export const fetchTransactionTracking = async (tranRef: string): Promise<any> =>
   }
 };
 
+// طلب رابط الفاتورة الضريبية
+export const fetchInvoiceUrl = async (codeSubscription: string | number): Promise<{ success?: boolean; url?: string; massege?: string }> => {
+  console.log(`🔍 جاري جلب رابط الفاتورة للاشتراك (رقم: ${codeSubscription})...`);
+  try {
+    const response = await apiClient.get('/subScription/bring_url_invoice', {
+      params: { code_subscription: codeSubscription }
+    });
+    console.log('📊 رابط الفاتورة:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ خطأ في جلب رابط الفاتورة:', error);
+    throw error;
+  }
+};
+
 // جلب تقارير الاشتراكات
 export const fetchSubscriptionReports = async (type: number = 1, listId: number = 0): Promise<any> => {
   console.log(`🔍 جاري جلب تقارير الاشتراكات (النوع: ${type})...`);

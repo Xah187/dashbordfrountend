@@ -265,14 +265,28 @@ function App() {
             borderRadius: roundedCorners ? borderRadius : '0px',
             textTransform: 'none',
             fontWeight: 600,
-            color: darkMode ? '#ffffff' : 'inherit',
             ...(isHighContrast && {
               border: `${highContrastValues.outlineWidth} solid`,
               borderColor: 'currentColor',
             }),
-            '& .MuiButton-label': {
-              color: darkMode ? '#ffffff !important' : 'inherit',
-            }
+          },
+          containedPrimary: {
+            color: '#ffffff !important',
+          },
+          containedSecondary: {
+            color: '#ffffff !important',
+          },
+          containedInfo: {
+            color: '#ffffff !important',
+          },
+          containedSuccess: {
+            color: '#ffffff !important',
+          },
+          containedWarning: {
+            color: '#ffffff !important',
+          },
+          containedError: {
+            color: '#ffffff !important',
           },
           text: {
             color: darkMode ? '#ffffff' : 'inherit',

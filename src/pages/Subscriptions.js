@@ -18,6 +18,7 @@
  * - تصدير إلى Excel
  */
 import React, { useState, useEffect } from 'react';
+import { fetchCompanies } from '../api/database-api';
 import {
   Box,
   Button,
@@ -57,7 +58,8 @@ import {
   Tooltip,
   Badge,
   Pagination,
-  Stack
+  Stack,
+  Autocomplete
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -96,7 +98,8 @@ import {
   renewSubscription,
   suspendSubscription,
   fetchSubscriptionReports,
-  fetchTransactionTracking
+  fetchTransactionTracking,
+  fetchInvoiceUrl
 } from '../api';
 
 // استيراد API أنواع الاشتراكات (التسعيرات)
@@ -152,10 +155,13 @@ const Subscriptions = () => {
   const [reportType, setReportType] = useState(1); // 1 = نشطة, 2 = الكل
   const [reportsData, setReportsData] = useState([]);
   const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsSearchQuery, setReportsSearchQuery] = useState('');
+  const [allCompaniesList, setAllCompaniesList] = useState([]);
 
   // State لتتبع العمليات
   const [tranRefSearch, setTranRefSearch] = useState('');
   const [trackingLoading, setTrackingLoading] = useState(false);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [trackingResult, setTrackingResult] = useState(null);
   const [openTrackingDialog, setOpenTrackingDialog] = useState(false);
 
@@ -256,11 +262,16 @@ const Subscriptions = () => {
     setReportsLoading(true);
     try {
       const result = await fetchSubscriptionReports(type);
-      if (result?.data && Array.isArray(result.data)) {
+
+      // The API returns: { success: true, data: { rows: [...], summary: {...} } }
+      if (result?.data?.rows && Array.isArray(result.data.rows)) {
+        setReportsData(result.data.rows);
+      } else if (result?.data && Array.isArray(result.data)) {
         setReportsData(result.data);
       } else if (result && Array.isArray(result)) {
         setReportsData(result);
       } else {
+        console.warn('⚠️ تنسيق بيانات التقارير غير متوقع:', result);
         setReportsData([]);
       }
     } catch (err) {
@@ -268,6 +279,33 @@ const Subscriptions = () => {
       // setNotification({ open: true, message: 'فشل في جلب التقارير', severity: 'error' });
     } finally {
       setReportsLoading(false);
+    }
+  };
+
+  // جلب كل الشركات لغرض ربط الأسماء في التقارير (Recursive fetching to ensure ALL are loaded)
+  const loadAllCompaniesForMapping = async () => {
+    try {
+      let currentPageNum = 1;
+      let allLoadedCompanies = [];
+      let fetchMore = true;
+
+      while (fetchMore) {
+        const response = await fetchCompanies({ limit: 1000, page: currentPageNum });
+        if (response && response.companies && Array.isArray(response.companies)) {
+          allLoadedCompanies = [...allLoadedCompanies, ...response.companies];
+        }
+
+        if (response && response.hasMore) {
+          currentPageNum++;
+        } else {
+          fetchMore = false;
+        }
+      }
+
+      setAllCompaniesList(allLoadedCompanies);
+      console.log(`Loaded ${allLoadedCompanies.length} companies for report mapping.`);
+    } catch (err) {
+      console.error('❌ Error fetching all companies for mapping:', err);
     }
   };
 
@@ -292,6 +330,35 @@ const Subscriptions = () => {
       setNotification({ open: true, message: 'فشل في جلب بيانات العملية، يرجى التأكد من الرقم', severity: 'error' });
     } finally {
       setTrackingLoading(false);
+    }
+  };
+
+  // جلب الفاتورة وفتحها في نافذة جديدة
+  const loadInvoiceUrl = async () => {
+    if (!tranRefSearch.trim()) {
+      setNotification({ open: true, message: 'الرجاء إدخال رقم كود الاشتراك (code_subscription)', severity: 'warning' });
+      return;
+    }
+    setInvoiceLoading(true);
+    try {
+      const result = await fetchInvoiceUrl(tranRefSearch);
+
+      if (result?.success === false) {
+        setNotification({ open: true, message: result.massege || 'لم يتم العثور على فاتورة', severity: 'error' });
+        return;
+      }
+
+      if (result?.url) {
+        window.open(result.url, '_blank');
+        setNotification({ open: true, message: 'تم فتح الفاتورة في نافذة جديدة', severity: 'success' });
+      } else {
+        setNotification({ open: true, message: 'رابط الفاتورة غير متوفر الآن', severity: 'warning' });
+      }
+    } catch (err) {
+      console.error('❌ Error fetching invoice url:', err);
+      setNotification({ open: true, message: 'فشل جلب الفاتورة، يرجى المحاولة لاحقاً', severity: 'error' });
+    } finally {
+      setInvoiceLoading(false);
     }
   };
 
@@ -451,6 +518,10 @@ const Subscriptions = () => {
       setNotification({ open: true, message: 'يرجى إدخال معرف منتج صحيح', severity: 'warning' });
       return;
     }
+    if (typeFormData.condition === '' || typeFormData.condition === undefined || typeFormData.condition === null || isNaN(Number(typeFormData.condition))) {
+      setNotification({ open: true, message: 'يرجى تحديد رقم الشرط', severity: 'warning' });
+      return;
+    }
 
     try {
       setTypeSaving(true);
@@ -527,7 +598,15 @@ const Subscriptions = () => {
     fetchStats();
     fetchPendingRequests();
     loadSubscriptionTypes();
+    loadAllCompaniesForMapping();
   }, [currentPage, itemsPerPage, searchQuery, filterStatus, sortBy, sortOrder]);
+
+  // جلب التقرير بناءً على النوع بمجرد التغيير
+  useEffect(() => {
+    if (activeTab === 2) {
+      loadReports(reportType);
+    }
+  }, [reportType, activeTab]);
 
   // دالة تجديد الاشتراك
   const handleRenewSubscription = async (subscriptionData) => {
@@ -1315,6 +1394,20 @@ const Subscriptions = () => {
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                   تقارير الشركات المشتركة
                 </Typography>
+                <TextField
+                  size="small"
+                  label="البحث في التقارير (اسم الشركة، رقم الشركة...)"
+                  value={reportsSearchQuery}
+                  onChange={(e) => setReportsSearchQuery(e.target.value)}
+                  sx={{ width: { xs: '100%', sm: 300 } }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
                   <Box sx={{ display: 'flex', gap: 1 }}>
                     <TextField
@@ -1328,10 +1421,19 @@ const Subscriptions = () => {
                       variant="contained"
                       color="primary"
                       onClick={loadTransactionTracking}
-                      disabled={trackingLoading || !tranRefSearch.trim()}
+                      disabled={trackingLoading || invoiceLoading || !tranRefSearch.trim()}
                       startIcon={trackingLoading ? <CircularProgress size={20} /> : <SearchIcon />}
                     >
-                      بحث
+                      التحقق
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="secondary"
+                      onClick={loadInvoiceUrl}
+                      disabled={trackingLoading || invoiceLoading || !tranRefSearch.trim()}
+                      startIcon={invoiceLoading ? <CircularProgress size={20} /> : <ReceiptLongIcon />}
+                    >
+                      عرض الفاتورة
                     </Button>
                   </Box>
                   <FormControl variant="outlined" size="small" sx={{ minWidth: 200 }}>
@@ -1367,23 +1469,123 @@ const Subscriptions = () => {
                   <Table size="small" sx={{ minWidth: 1200 }}>
                     <TableHead>
                       <TableRow sx={{ bgcolor: 'grey.50' }}>
-                        {Object.keys(reportsData[0]).map((key) => (
-                          <TableCell key={key} sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
-                            {key}
-                          </TableCell>
-                        ))}
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>الشركة</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>كود الاشتراك</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>الباقة</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap', textAlign: 'center' }}>الاستخدام</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>الحالة</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>رقم حوالة الدفع</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>البداية / النهاية</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>إجراءات</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {reportsData.map((row, index) => (
-                        <TableRow key={index} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
-                          {Object.values(row).map((val, i) => (
-                            <TableCell key={i} sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
-                              {String(val ?? '—')}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))}
+                      {reportsData
+                        .filter(row => {
+                          if (!reportsSearchQuery) return true;
+                          const searchStr = reportsSearchQuery.toLowerCase();
+
+                          // Try to find the company name safely
+                          const mappedCompany = allCompaniesList?.find?.(s => String(s.id) === String(row.company_id))?.name || '';
+
+                          return (
+                            (row.name && row.name.toLowerCase().includes(searchStr)) ||
+                            (row.code_subscription && row.code_subscription.toLowerCase().includes(searchStr)) ||
+                            (row.tran_ref && row.tran_ref.toLowerCase().includes(searchStr)) ||
+                            (row.name_package && row.name_package.toLowerCase().includes(searchStr)) ||
+                            (mappedCompany && mappedCompany.toLowerCase().includes(searchStr))
+                          );
+                        })
+                        .map((row, index) => {
+                          const mappedCompany = allCompaniesList?.find?.(c => String(c.id) === String(row.company_id));
+                          const companyNameText = mappedCompany ? mappedCompany.name : 'شركة غير متوفرة';
+                          const companyCityText = mappedCompany ? mappedCompany.city : '';
+
+                          return (
+                            <TableRow key={index} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
+                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                <Typography variant="body2" fontWeight="bold">
+                                  {companyNameText}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {companyCityText ? `مدينة: ${companyCityText}` : `رمز ${row.company_id}`}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                <Typography variant="body2" fontWeight="bold" color="primary">
+                                  {row.code_subscription || '—'}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                <Chip size="small" color="secondary" label={row.name_package || '—'} />
+                              </TableCell>
+                              <TableCell align="center" sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                  <Typography variant="body2">
+                                    {row.project_count_used || '0'} / {row.project_count || '0'}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {(row.project_count || 0) - (row.project_count_used || 0)} متبقي
+                                  </Typography>
+                                </Box>
+                              </TableCell>
+                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                <Chip
+                                  label={row.status === 'active' ? 'نشط' : row.status === 'inactive' ? 'غير نشط' : row.status || '—'}
+                                  color={row.status === 'active' ? 'success' : 'default'}
+                                  size="small"
+                                  variant="outlined"
+                                />
+                              </TableCell>
+                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                {row.tran_ref || '—'}
+                              </TableCell>
+                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                <Typography variant="body2">
+                                  من: {row.start_date ? new Date(row.start_date).toLocaleDateString() : '—'}
+                                </Typography>
+                                <Typography variant="caption">
+                                  إلى: {row.end_date ? new Date(row.end_date).toLocaleDateString() : '—'}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                <Tooltip title="طباعة الفاتورة">
+                                  <span>
+                                    <IconButton
+                                      size="small"
+                                      color="primary"
+                                      disabled={invoiceLoading || !row.code_subscription}
+                                      onClick={async () => {
+                                        setTranRefSearch(row.code_subscription);
+                                        // Directly fetch invoice url to avoid state timing issues
+                                        setInvoiceLoading(true);
+                                        try {
+                                          const invoiceResult = await fetchInvoiceUrl(row.code_subscription);
+                                          if (invoiceResult?.url) {
+                                            if (invoiceResult.url.startsWith('https://Odoo')) {
+                                              window.open(invoiceResult.url, '_blank', 'noopener,noreferrer');
+                                            } else {
+                                              setNotification({ open: true, message: 'رابط الفاتورة غير صحيح!', severity: 'error' });
+                                            }
+                                          } else {
+                                            setNotification({ open: true, message: 'لم يتم العثور على فاتورة لهذا الاشتراك', severity: 'warning' });
+                                          }
+                                        } catch (err) {
+                                          console.error('❌ Error viewing row invoice:', err);
+                                          setNotification({ open: true, message: 'فشل في جلب الفاتورة من النظام المالي', severity: 'error' });
+                                        } finally {
+                                          setInvoiceLoading(false);
+                                        }
+                                      }}
+                                    >
+                                      {invoiceLoading && tranRefSearch === row.code_subscription ? <CircularProgress size={16} /> : <ReceiptLongIcon />}
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -1513,14 +1715,25 @@ const Subscriptions = () => {
               <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 3, mb: 3 }}>
                 <Grid container spacing={3}>
                   <Grid item xs={12} md={4}>
-                    <TextField
-                      fullWidth
-                      label="رقم الشركة (Company ID)"
-                      type="number"
-                      variant="outlined"
-                      value={newSubFormData.company_id}
-                      onChange={(e) => setNewSubFormData({ ...newSubFormData, company_id: e.target.value })}
-                      inputProps={{ min: 1 }}
+                    <Autocomplete
+                      options={allCompaniesList || []}
+                      getOptionLabel={(option) => {
+                        if (typeof option === 'string') return option;
+                        return `${option.name || option.NameCompany || 'شركة غير معرفة'} (رمز: ${option.id})`;
+                      }}
+                      value={allCompaniesList?.find(c => String(c.id) === String(newSubFormData.company_id)) || null}
+                      onChange={(event, newValue) => {
+                        setNewSubFormData({ ...newSubFormData, company_id: newValue ? newValue.id : '' });
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="البحث عن اسم الشركة أو اختيارها"
+                          variant="outlined"
+                          fullWidth
+                        />
+                      )}
+                      noOptionsText="لم يتم جلب أسماء الشركات بعد"
                     />
                   </Grid>
 
@@ -1829,6 +2042,16 @@ const Subscriptions = () => {
                 placeholder="مثال: 919"
               />
             )}
+            <TextField
+              fullWidth
+              label="رقم الشرط (Condition)"
+              type="number"
+              value={typeFormData.condition}
+              onChange={(e) => setTypeFormData({ ...typeFormData, condition: e.target.value })}
+              required
+              placeholder="مثال: 0 أو أكثر"
+              InputProps={{ inputProps: { min: 0 } }}
+            />
             <TextField
               fullWidth
               label="الوصف (اختياري)"
