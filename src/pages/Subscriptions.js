@@ -44,10 +44,7 @@ import {
   MenuItem,
   InputAdornment,
   Divider,
-  Switch,
-  FormControlLabel,
   Alert,
-  LinearProgress,
   Snackbar,
   Tabs,
   Tab,
@@ -58,7 +55,6 @@ import {
   Tooltip,
   Badge,
   Pagination,
-  Stack,
   Autocomplete
 } from '@mui/material';
 import {
@@ -69,7 +65,6 @@ import {
   CheckCircle as CheckCircleIcon,
   ReceiptLong as ReceiptLongIcon,
   Business as BusinessIcon,
-  Cancel as CancelIcon,
   Check as CheckIcon,
   Close as CloseIcon,
   GetApp as GetAppIcon,
@@ -83,20 +78,15 @@ import {
   KeyboardArrowUp as KeyboardArrowUpIcon,
   KeyboardArrowDown as KeyboardArrowDownIcon
 } from '@mui/icons-material';
-import { useTheme } from '@mui/material/styles';
 
-import { getSubscriptionTypeColor, getSoftSubscriptionStatusChipSx, getAutoRenewColor } from '../utils/colorUtils';
-import { AutoRenewBadge, SubscriptionStatusBadge } from '../components/common';
+import { getSoftSubscriptionStatusChipSx } from '../utils/colorUtils';
 
 // استيراد APIs الجديدة المفعلة للاشتراكات والطلبات المعلقة
 import {
-  fetchSubscriptions as fetchSubscriptionsAPI,
   fetchSubscriptionStats,
   fetchPendingSubscriptionRequests,
   approveSubscriptionRequest,
   rejectSubscriptionRequest,
-  renewSubscription,
-  suspendSubscription,
   fetchSubscriptionReports,
   fetchTransactionTracking,
   fetchInvoiceUrl
@@ -112,8 +102,6 @@ import {
 } from '../api/subscriptionTypesApi';
 
 const Subscriptions = () => {
-  const theme = useTheme();
-
   // State للبيانات
   const [subscriptions, setSubscriptions] = useState([]);
   const [stats, setStats] = useState({});
@@ -129,8 +117,8 @@ const Subscriptions = () => {
 
   // State للـ pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [totalItems, setTotalItems] = useState(0);
+  const [itemsPerPage] = useState(10);
+  const [, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
 
   // State للحوارات
@@ -199,28 +187,120 @@ const Subscriptions = () => {
   const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
 
-  // جلب البيانات من API الجديد المفعل
+  // جلب البيانات بالآلية الجديدة التدريجية (Progressive Fetching) والفلترة محلياً
   const fetchSubscriptions = async () => {
     try {
       setLoading(true);
 
-      const result = await fetchSubscriptionsAPI({
-        page: currentPage,
-        limit: itemsPerPage,
-        search: searchQuery,
-        status: filterStatus,
-        sortBy: sortBy,
-        sortOrder: sortOrder
+      // Ensure companies are loaded for mapping
+      let currentCompanies = allCompaniesList;
+      if (!currentCompanies || currentCompanies.length === 0) {
+        currentCompanies = await loadAllCompaniesForMapping();
+      }
+
+      let fetchMore = true;
+      let listId = 0;
+      let allData = [];
+      const type = filterStatus === 'all' ? 2 : 1; 
+
+      while (fetchMore) {
+        const result = await fetchSubscriptionReports(type, listId);
+        let newRows = [];
+
+        if (result?.data?.rows && Array.isArray(result.data.rows)) {
+          newRows = result.data.rows;
+        } else if (result?.data && Array.isArray(result.data)) {
+          newRows = result.data;
+        } else if (result && Array.isArray(result)) {
+          newRows = result;
+        }
+
+        if (newRows.length > 0) {
+          allData = [...allData, ...newRows];
+          if (newRows.length < 20) {
+            fetchMore = false;
+          } else {
+            const lastItem = newRows[newRows.length - 1];
+            if (lastItem && lastItem.id) {
+              listId = lastItem.id;
+            } else {
+              fetchMore = false;
+            }
+          }
+        } else {
+          fetchMore = false;
+        }
+      }
+
+      // تجهيز البيانات المطابقة لجدول الاشتراكات النشطة
+      const mapped = allData.map(item => {
+        const company = currentCompanies.find(c => String(c.id) === String(item.company_id)) || {};
+        return {
+          id: item.id,
+          companyId: item.company_id,
+          companyName: company.NameCompany || company.name || 'غير متوفرة',
+          planName: item.name_package || 'غير محدد',
+          startDate: item.start_date || '',
+          endDate: item.end_date || '',
+          amount: parseFloat(item.price) || 0,
+          status: item.status || 'unknown',
+          autoRenew: false,
+          paymentMethod: 'تحويل بنكي',
+          branchesAllowed: item.project_count || 0,
+          currentBranches: item.project_count_used || 0,
+          remainingBranches: (item.project_count || 0) - (item.project_count_used || 0),
+          city: company.City || company.city || 'غير محدد',
+          country: company.Country || company.country || 'غير محدد',
+          registrationNumber: company.CommercialRegistrationNumber || 'غير محدد',
+          createdAt: item.createdAt || ''
+        };
       });
 
-      setSubscriptions(Array.isArray(result.data) ? result.data : []);
-      setTotalItems(result.pagination?.totalItems || 0);
-      setTotalPages(result.pagination?.totalPages || 0);
+      // تطبيق البحث
+      let filtered = mapped;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        filtered = filtered.filter(sub => 
+          sub.companyName.toLowerCase().includes(q) ||
+          sub.planName.toLowerCase().includes(q) ||
+          sub.city.toLowerCase().includes(q) ||
+          (sub.registrationNumber && sub.registrationNumber.toLowerCase().includes(q))
+        );
+      }
+
+      if (filterStatus && filterStatus !== 'all') {
+        filtered = filtered.filter(sub => sub.status === filterStatus);
+      }
+
+      if (sortBy) {
+        filtered.sort((a, b) => {
+          let valA = a[sortBy];
+          let valB = b[sortBy];
+          
+          if (sortBy === 'endDate' || sortBy === 'startDate') {
+            valA = new Date(valA || 0).getTime();
+            valB = new Date(valB || 0).getTime();
+          }
+
+          if (valA < valB) return sortOrder === 'ASC' ? -1 : 1;
+          if (valA > valB) return sortOrder === 'ASC' ? 1 : -1;
+          return 0;
+        });
+      }
+
+      setTotalItems(filtered.length);
+      const totalP = Math.ceil(filtered.length / itemsPerPage) || 1;
+      setTotalPages(totalP);
+
+      const safePage = currentPage > totalP ? (totalP === 0 ? 1 : totalP) : currentPage;
+      const startIndex = (safePage - 1) * itemsPerPage;
+      const paginated = filtered.slice(startIndex, startIndex + itemsPerPage);
+
+      setSubscriptions(paginated);
 
     } catch (err) {
-      console.error('❌ Error fetching subscriptions with NEW API:', err);
-      setError(err.message);
-      // التأكد من بقاء المتغيرات كـ arrays فارغة في حالة الخطأ
+      console.error('❌ Error fetching active subscriptions progressively:', err);
+      setError(err.message || 'Error fetching subscriptions');
       setSubscriptions([]);
       setTotalItems(0);
       setTotalPages(0);
@@ -257,25 +337,49 @@ const Subscriptions = () => {
     }
   };
 
-  // جلب تقارير الاشتراكات
+  // جلب تقارير الاشتراكات بتدريج لضمان الحصول على كافة النتائج
   const loadReports = async (type) => {
     setReportsLoading(true);
     try {
-      const result = await fetchSubscriptionReports(type);
+      let fetchMore = true;
+      let listId = 0;
+      let allReports = [];
 
-      // The API returns: { success: true, data: { rows: [...], summary: {...} } }
-      if (result?.data?.rows && Array.isArray(result.data.rows)) {
-        setReportsData(result.data.rows);
-      } else if (result?.data && Array.isArray(result.data)) {
-        setReportsData(result.data);
-      } else if (result && Array.isArray(result)) {
-        setReportsData(result);
-      } else {
-        console.warn('⚠️ تنسيق بيانات التقارير غير متوقع:', result);
-        setReportsData([]);
+      while (fetchMore) {
+        const result = await fetchSubscriptionReports(type, listId);
+        let newRows = [];
+
+        // تحليل البيانات المرجعة بناءً على تنسيقات الـ API المحتملة
+        if (result?.data?.rows && Array.isArray(result.data.rows)) {
+          newRows = result.data.rows;
+        } else if (result?.data && Array.isArray(result.data)) {
+          newRows = result.data;
+        } else if (result && Array.isArray(result)) {
+          newRows = result;
+        }
+
+        if (newRows.length > 0) {
+          allReports = [...allReports, ...newRows];
+          
+          // الخادم يرجع 20 سجل كحد أقصى، لو أقل يعني وصلنا للنهاية
+          if (newRows.length < 20) {
+            fetchMore = false;
+          } else {
+            const lastItem = newRows[newRows.length - 1];
+            if (lastItem && lastItem.id) {
+              listId = lastItem.id;
+            } else {
+              fetchMore = false;
+            }
+          }
+        } else {
+          fetchMore = false;
+        }
       }
+
+      setReportsData(allReports);
     } catch (err) {
-      console.error('❌ Error fetching reports:', err);
+      console.error('❌ Error fetching reports gradually:', err);
       // setNotification({ open: true, message: 'فشل في جلب التقارير', severity: 'error' });
     } finally {
       setReportsLoading(false);
@@ -304,8 +408,10 @@ const Subscriptions = () => {
 
       setAllCompaniesList(allLoadedCompanies);
       console.log(`Loaded ${allLoadedCompanies.length} companies for report mapping.`);
+      return allLoadedCompanies;
     } catch (err) {
       console.error('❌ Error fetching all companies for mapping:', err);
+      return [];
     }
   };
 
@@ -373,6 +479,7 @@ const Subscriptions = () => {
     if (activeTab === 4 && subscriptionTypes.length === 0) {
       loadSubscriptionTypes();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   // حفظ اشتراك جديد لشركة
@@ -417,7 +524,7 @@ const Subscriptions = () => {
   // قبول طلب الاشتراك
   const handleApproveRequest = async (requestId) => {
     try {
-      const result = await approveSubscriptionRequest(requestId);
+      await approveSubscriptionRequest(requestId);
 
       // setNotification({
       //   open: true,
@@ -443,7 +550,7 @@ const Subscriptions = () => {
   // رفض طلب الاشتراك
   const handleRejectRequest = async (requestId, reason) => {
     try {
-      const result = await rejectSubscriptionRequest(requestId, reason);
+      await rejectSubscriptionRequest(requestId, reason);
 
       setNotification({
         open: true,
@@ -514,10 +621,7 @@ const Subscriptions = () => {
       setNotification({ open: true, message: 'يرجى إدخال سعر صحيح لكل مشروع', severity: 'warning' });
       return;
     }
-    if (!editingType && (!typeFormData.product_id || isNaN(Number(typeFormData.product_id)))) {
-      setNotification({ open: true, message: 'يرجى إدخال معرف منتج صحيح', severity: 'warning' });
-      return;
-    }
+
     if (typeFormData.condition === '' || typeFormData.condition === undefined || typeFormData.condition === null || isNaN(Number(typeFormData.condition))) {
       setNotification({ open: true, message: 'يرجى تحديد رقم الشرط', severity: 'warning' });
       return;
@@ -543,7 +647,12 @@ const Subscriptions = () => {
       }
 
       setOpenTypeDialog(false);
-      loadSubscriptionTypes();
+      
+      // تأخير جلب البيانات لثانيتين حتى يكتمل إقلاع الباك إند بعد نجاح العملية
+      setTimeout(() => {
+        loadSubscriptionTypes();
+      }, 2000);
+
     } catch (err) {
       console.error('❌ Error saving subscription type:', err);
       setNotification({ open: true, message: 'خطأ في حفظ نوع الاشتراك: ' + (err.message || ''), severity: 'error' });
@@ -583,14 +692,7 @@ const Subscriptions = () => {
     }
   };
 
-  // تحديث تلقائي كل 30 ثانية
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refreshData();
-    }, 30000);
 
-    return () => clearInterval(interval);
-  }, []);
 
   // تحميل البيانات عند تحميل الصفحة
   useEffect(() => {
@@ -599,6 +701,7 @@ const Subscriptions = () => {
     fetchPendingRequests();
     loadSubscriptionTypes();
     loadAllCompaniesForMapping();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, itemsPerPage, searchQuery, filterStatus, sortBy, sortOrder]);
 
   // جلب التقرير بناءً على النوع بمجرد التغيير
@@ -684,16 +787,6 @@ const Subscriptions = () => {
 
   // دالة تصدير البيانات
   const handleExportToExcel = () => {
-    const fields = ['companyName', 'planName', 'startDate', 'endDate', 'amount', 'status', 'autoRenew', 'paymentMethod'];
-    const headers = ['الشركة', 'الباقة', 'تاريخ البدء', 'تاريخ الانتهاء', 'المبلغ (ر.س)', 'الحالة', 'التجديد التلقائي', 'طريقة الدفع'];
-
-    const formattedSubscriptions = subscriptions.map(sub => ({
-      ...sub,
-      status: getStatusText(sub.status),
-      autoRenew: sub.autoRenew ? 'مفعل' : 'غير مفعل',
-      amount: sub.amount.toLocaleString('en-GB')
-    }));
-
     // تم إزالة تصدير البيانات إلى Excel
   };
 
@@ -1104,7 +1197,7 @@ const Subscriptions = () => {
                         <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>تاريخ الانتهاء</TableCell>
                         <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>المبلغ (ر.س)</TableCell>
                         <TableCell>الحالة</TableCell>
-                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>الفروع</TableCell>
+                        <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>المشاريع المستخدمة</TableCell>
                         <TableCell>الإجراءات</TableCell>
                       </TableRow>
                     </TableHead>
@@ -1125,7 +1218,6 @@ const Subscriptions = () => {
                         </TableRow>
                       ) : (
                         subscriptions.map((subscription) => {
-                          const daysRemaining = getDaysRemaining(subscription.endDate);
                           return (
                             <TableRow key={subscription.id}>
                               <TableCell>
@@ -1214,30 +1306,7 @@ const Subscriptions = () => {
                                     </IconButton>
                                   </Tooltip>
 
-                                  <Tooltip title="تجديد">
-                                    <IconButton
-                                      size="small"
-                                      onClick={() => {
-                                        setSelectedSubscription(subscription);
-                                        setOpenRenewDialog(true);
-                                      }}
-                                    >
-                                      <AutoRenewIcon sx={{ fontSize: { xs: 18, sm: 22 } }} />
-                                    </IconButton>
-                                  </Tooltip>
 
-                                  <Tooltip title="إيقاف">
-                                    <IconButton
-                                      size="small"
-                                      color="error"
-                                      onClick={() => {
-                                        setSelectedSubscription(subscription);
-                                        setOpenSuspendDialog(true);
-                                      }}
-                                    >
-                                      <CancelIcon sx={{ fontSize: { xs: 18, sm: 22 } }} />
-                                    </IconButton>
-                                  </Tooltip>
                                 </Box>
                               </TableCell>
                             </TableRow>
@@ -1772,7 +1841,7 @@ const Subscriptions = () => {
                     <Grid item xs={12}>
                       <Alert severity="info" sx={{ borderRadius: 2 }}>
                         {(() => {
-                          const selectedType = subscriptionTypes.find(t => t.id == newSubFormData.subscription_type_id);
+                          const selectedType = subscriptionTypes.find(t => String(t.id) === String(newSubFormData.subscription_type_id));
                           if (!selectedType) return 'لم يتم العثور على نوع الاشتراك';
                           const count = Number(newSubFormData.project_count);
                           const price = count * selectedType.price_per_project * selectedType.duration_in_months;
@@ -2031,17 +2100,7 @@ const Subscriptions = () => {
               placeholder="مثال: 115"
               InputProps={{ inputProps: { min: 0, step: 0.01 } }}
             />
-            {!editingType && (
-              <TextField
-                fullWidth
-                label="معرف المنتج Product ID"
-                type="number"
-                value={typeFormData.product_id}
-                onChange={(e) => setTypeFormData({ ...typeFormData, product_id: e.target.value })}
-                required
-                placeholder="مثال: 919"
-              />
-            )}
+
             <TextField
               fullWidth
               label="رقم الشرط (Condition)"

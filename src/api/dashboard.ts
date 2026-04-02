@@ -70,16 +70,16 @@ export interface DashboardReports {
  */
 export const fetchDashboardStats = async (): Promise<DashboardStats> => {
   console.log('🔍 جاري جلب إحصائيات الداشبورد...');
-  
+
   try {
     const response = await apiClient.get<{
       success: boolean;
       data: DashboardStats;
       message?: string;
     }>('/dashboard/stats');
-    
+
     console.log('📊 استجابة إحصائيات الداشبورد:', response.data);
-    
+
     if (response.data.success) {
       return response.data.data;
     } else {
@@ -96,16 +96,16 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
  */
 export const fetchDashboardReports = async (): Promise<DashboardReports> => {
   console.log('🔍 جاري جلب تقارير الداشبورد...');
-  
+
   try {
     const response = await apiClient.get<{
       success: boolean;
       data: DashboardReports;
       message?: string;
     }>('/dashboard/reports');
-    
+
     console.log('📊 استجابة تقارير الداشبورد:', response.data);
-    
+
     if (response.data.success) {
       return response.data.data;
     } else {
@@ -178,7 +178,7 @@ export const calculatePercentage = (value: number, total: number): string => {
   return `${((value / total) * 100).toFixed(2)}%`;
 };
 
-export default {
+const dashboardApi = {
   fetchDashboardStats,
   fetchDashboardReports,
   formatProjectStatus,
@@ -187,3 +187,5 @@ export default {
   formatDashboardDate,
   calculatePercentage
 };
+
+export default dashboardApi;

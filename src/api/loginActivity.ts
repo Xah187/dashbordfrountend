@@ -9,6 +9,7 @@
  * - GET /api/login-activity/stats/summary - إحصائيات تسجيل الدخول
  */
 
+import el from "date-fns/esm/locale/el";
 import { apiClient } from "./config";
 
 // أنواع البيانات لتسجيل الدخول
@@ -52,27 +53,27 @@ export const fetchAllLoginActivities = async (params: LoginActivityFilters = {})
   hasMore: boolean;
 }> => {
   const { number = 0, limit = 10 } = params;
-  
+
   console.log('🔍 جاري جلب أنشطة تسجيل الدخول...', { number, limit });
-  
+
   try {
     const queryParams = new URLSearchParams();
     queryParams.append('number', number.toString());
     if (limit) queryParams.append('limit', limit.toString());
-    
+
     const response = await apiClient.get<{
       success: boolean;
       data: LoginActivity[];
       count: number;
       message?: string;
     }>(`/login-activity?${queryParams.toString()}`);
-    
+
     console.log('📊 استجابة أنشطة تسجيل الدخول:', response.data);
-    
+
     if (response.data.success) {
       const activities = response.data.data || [];
       const hasMore = activities.length === limit;
-      
+
       return {
         activities,
         count: response.data.count,
@@ -92,16 +93,16 @@ export const fetchAllLoginActivities = async (params: LoginActivityFilters = {})
  */
 export const fetchLoginActivityById = async (id: number): Promise<LoginActivity> => {
   console.log(`🔍 جاري جلب نشاط تسجيل الدخول للمعرف: ${id}`);
-  
+
   try {
     const response = await apiClient.get<{
       success: boolean;
       data: LoginActivity;
       message?: string;
     }>(`/login-activity/${id}`);
-    
+
     console.log('📊 استجابة نشاط تسجيل الدخول:', response.data);
-    
+
     if (response.data.success) {
       return response.data.data;
     } else {
@@ -125,27 +126,27 @@ export const fetchLoginActivitiesByCompany = async (
   hasMore: boolean;
 }> => {
   const { number = 0, limit = 10 } = params;
-  
+
   console.log(`🔍 جاري جلب أنشطة تسجيل الدخول للشركة: ${companyId}`, { number, limit });
-  
+
   try {
     const queryParams = new URLSearchParams();
     queryParams.append('number', number.toString());
     if (limit) queryParams.append('limit', limit.toString());
-    
+
     const response = await apiClient.get<{
       success: boolean;
       data: LoginActivity[];
       count: number;
       message?: string;
     }>(`/login-activity/company/${companyId}?${queryParams.toString()}`);
-    
+
     console.log('📊 استجابة أنشطة تسجيل الدخول للشركة:', response.data);
-    
+
     if (response.data.success) {
       const activities = response.data.data || [];
       const hasMore = activities.length === limit;
-      
+
       return {
         activities,
         count: response.data.count,
@@ -165,16 +166,16 @@ export const fetchLoginActivitiesByCompany = async (
  */
 export const searchLoginActivityByCode = async (code: string): Promise<LoginActivity> => {
   console.log(`🔍 جاري البحث عن نشاط تسجيل الدخول بالكود: ${code}`);
-  
+
   try {
     const response = await apiClient.get<{
       success: boolean;
       data: LoginActivity;
       message?: string;
     }>(`/login-activity/search/code/${code}`);
-    
+
     console.log('📊 استجابة البحث بالكود:', response.data);
-    
+
     if (response.data.success) {
       return response.data.data;
     } else {
@@ -191,16 +192,16 @@ export const searchLoginActivityByCode = async (code: string): Promise<LoginActi
  */
 export const fetchLoginActivityStats = async (): Promise<LoginActivityStats> => {
   console.log('🔍 جاري جلب إحصائيات تسجيل الدخول...');
-  
+
   try {
     const response = await apiClient.get<{
       success: boolean;
       data: LoginActivityStats;
       message?: string;
     }>('/login-activity/stats/summary');
-    
+
     console.log('📊 استجابة إحصائيات تسجيل الدخول:', response.data);
-    
+
     if (response.data.success) {
       return response.data.data;
     } else {
@@ -249,14 +250,14 @@ export const formatLoginDate = (dateString: string): string => {
  */
 export const calculateSessionDuration = (startDate: string, endDate?: string): string => {
   if (!startDate) return 'غير محدد';
-  
+
   const start = new Date(startDate);
   const end = endDate ? new Date(endDate) : new Date();
-  
+
   const diffMs = end.getTime() - start.getTime();
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-  
+
   if (diffHours > 0) {
     return `${diffHours} ساعة و ${diffMinutes} دقيقة`;
   } else {
@@ -272,13 +273,13 @@ export const filterActivitiesByPeriod = (
   period: 'today' | 'week' | 'month' | 'all'
 ): LoginActivity[] => {
   if (period === 'all') return activities;
-  
+
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  
+
   return activities.filter(activity => {
     const activityDate = new Date(activity.DateOFlogin);
-    
+
     switch (period) {
       case 'today':
         return activityDate >= today;
@@ -294,7 +295,7 @@ export const filterActivitiesByPeriod = (
   });
 };
 
-export default {
+const loginActivityApi = {
   fetchAllLoginActivities,
   fetchLoginActivityById,
   fetchLoginActivitiesByCompany,
@@ -305,3 +306,5 @@ export default {
   calculateSessionDuration,
   filterActivitiesByPeriod
 };
+
+export default loginActivityApi;

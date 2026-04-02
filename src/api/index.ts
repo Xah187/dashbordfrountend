@@ -141,12 +141,8 @@ export type {
  * دالة مساعدة للتحقق من توفر API معين
  */
 export const isApiEndpointAvailable = async (endpoint: string): Promise<boolean> => {
-  try {
-    // يمكن إضافة منطق للتحقق من توفر endpoint معين
-    return true;
-  } catch {
-    return false;
-  }
+  // يمكن إضافة منطق للتحقق من توفر endpoint معين
+  return true;
 };
 
 /**
@@ -167,8 +163,10 @@ export const getSystemInfo = () => {
   };
 };
 
-export default {
+const mainApi = {
   API_ENDPOINTS,
   isApiEndpointAvailable,
   getSystemInfo
 };
+
+export default mainApi;
