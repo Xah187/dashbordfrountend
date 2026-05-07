@@ -17,6 +17,7 @@ import {
   ProjectsView,
   ProjectDetailsView,
 } from "./components";
+import { ExportExcelButton } from '../../components/common/ExportExcelButton';
 
 export interface ViewState {
   type: 'companies' | 'branches' | 'employees' | 'projects' | 'projectDetails';
@@ -232,9 +233,13 @@ const CompaniesSubscribedPage: React.FC = () => {
     <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, p: { xs: 1.5, md: 0 } }}>
       {/* عنوان الصفحة والتنقل */}
       <Paper sx={{ p: { xs: 2, md: 3 } }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          📊 صفحة الشركات المشتركة
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+          <Typography variant="h4" component="h1" gutterBottom sx={{ mb: 0 }}>
+            📊 صفحة الشركات المشتركة
+          </Typography>
+          
+          <ExportExcelButton />
+        </Box>
         
         <Breadcrumbs aria-label="breadcrumb" sx={{ mt: 2 }}>
           {buildBreadcrumbs()}

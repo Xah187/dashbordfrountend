@@ -2396,44 +2396,6 @@ export const companiesSubscribedApi = {
       };
     }
   },
-
-  // جلب إحصائيات الاشتراكات للشركة (مشاريع مدفوعة/غير مدفوعة)
-  async getCompanySubscriptionStats(companyId: number): Promise<ApiResponse<{
-    totalAllowed: number;
-    totalUsed: number;
-    totalRemaining: number;
-    hasActiveSubscription: boolean;
-  }>> {
-    try {
-      // نفترض أن هذا endpoint يعيد بيانات اشتراكات الشركة (company_subscriptions)
-      // بناءً على ما وجدناه في الباك اند: Bring_company_subscription?type=1
-      // لكن بما أن الـ session هي التي تحدد الشركة في الباك اند، 
-      // فقد نحتاج لعمل استعلام مباشر إذا كنا في وضع الـ Admin
-      // للأسف الـ endpoint الحالي للـ dashboard قد لا يوفر هذه المعلومة بسهولة بدون تعديل الباك اند.
-      // سنحاول استخدام ما وجدناه في تفاصيل الشركة أولاً كحل مؤقت إذا كان يعيد الاشتراك.
-      
-      const response = await apiClient.get(`/companies/${companyId}/details`);
-      
-      // القيمة الافتراضية
-      return {
-        success: true,
-        data: {
-          totalAllowed: response.data?.data?.subscriptionStatus === 'active' ? (response.data?.data?.projectsCount || 0) : 0,
-          totalUsed: 0,
-          totalRemaining: 0,
-          hasActiveSubscription: response.data?.data?.subscriptionStatus === 'active'
-        }
-      };
-    } catch (error: any) {
-      console.error("خطأ في جلب إحصائيات الاشتراك:", error);
-      return {
-        success: false,
-        error: "حدث خطأ أثناء جلب إحصائيات الاشتراك"
-      };
-    }
-  },
-
-  
 };
 
 export default companiesSubscribedApi; 

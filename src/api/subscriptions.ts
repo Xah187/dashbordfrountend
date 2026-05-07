@@ -82,19 +82,86 @@ export const fetchSubscriptions = async (filters: SubscriptionFilters = {}) => {
 // جلب إحصائيات الاشتراكات
 export const fetchSubscriptionStats = async (): Promise<{ success: boolean; data: SubscriptionStats }> => {
   try {
-    const response = await apiClient.get('/dashboard/stats');
-    const { overview } = response.data.data;
+    // جلب كل الاشتراكات (type=2 = الكل) لحساب الإحصائيات الدقيقة
+    let allSubs: any[] = [];
+    let listId = 0;
+    let fetchMore = true;
+    let summary: any = null;
 
-    // تحويل البيانات من التنسيق الجديد
+    while (fetchMore) {
+      const response = await apiClient.get('/subScription/Bring_all_companyS_subscription', {
+        params: { type: 2, ListID: listId }
+      });
+
+      const data = response.data?.data;
+      const rows = data?.rows || (Array.isArray(data) ? data : []);
+
+      // أخذ الـ summary من أول response (يتكرر في كل الردود)
+      if (!summary && data?.summary) {
+        summary = data.summary;
+      }
+
+      if (rows.length > 0) {
+        allSubs = [...allSubs, ...rows];
+        const lastId = rows[rows.length - 1]?.id;
+        // إيقاف الحلقة عند: أقل من 20 نتيجة، أو نفس الـ id (يعني لم يتقدم)
+        if (rows.length < 20 || !lastId || lastId === listId) {
+          fetchMore = false;
+        } else {
+          listId = lastId;
+        }
+      } else {
+        fetchMore = false;
+      }
+
+      // حماية قصوى: لا نجلب أكثر من 500 اشتراك في الإحصائيات
+      if (allSubs.length >= 500) fetchMore = false;
+    }
+
+    // حساب الإحصائيات الحقيقية من البيانات
+    const now = new Date();
+    const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    let activeCount = 0;
+    let inactiveCount = 0;
+    let expiringSoonCount = 0;
+    let totalRevenue = 0;
+
+    allSubs.forEach((sub: any) => {
+      const price = parseFloat(sub.price) || 0;
+      const vat = parseFloat(sub.vat) || 0;
+      totalRevenue += price + vat;
+
+      if (sub.status === 'active') {
+        activeCount++;
+        // تحقق من الاشتراكات التي تنتهي خلال 30 يوم
+        if (sub.end_date) {
+          const endDate = new Date(sub.end_date);
+          if (endDate <= thirtyDaysLater && endDate >= now) {
+            expiringSoonCount++;
+          }
+        }
+      } else {
+        inactiveCount++;
+      }
+    });
+
+    // جلب عدد الشركات من dashboard/stats
+    let totalCompanies = 0;
+    try {
+      const dashResponse = await apiClient.get('/dashboard/stats');
+      totalCompanies = dashResponse.data?.data?.overview?.totalCompanies || 0;
+    } catch { /* ignore */ }
+
     return {
       success: true,
       data: {
-        totalCompanies: overview.totalCompanies || 0,
-        activeSubscriptions: overview.totalCompanies || 0, // نستخدم عدد الشركات النشطة
-        expiredSubscriptions: 0, // يمكن تحديثه لاحقاً
-        expiringSoon: 0, // يمكن تحديثه لاحقاً
-        totalRevenue: 0,
-        averageCost: 0
+        totalCompanies,
+        activeSubscriptions: activeCount,
+        expiredSubscriptions: inactiveCount,
+        expiringSoon: expiringSoonCount,
+        totalRevenue,
+        averageCost: allSubs.length > 0 ? totalRevenue / allSubs.length : 0
       }
     };
   } catch (error) {
@@ -147,7 +214,8 @@ export const fetchTransactionTracking = async (tranRef: string): Promise<any> =>
   console.log(`🔍 جاري جلب تفاصيل العملية (رقم: ${tranRef})...`);
   try {
     const response = await apiClient.get('/subScription/Process_tracking', {
-      params: { tran_ref: tranRef }
+      params: { tran_ref: tranRef },
+      timeout: 15000
     });
     console.log('📊 تفاصيل العملية:', response.data);
     return response.data?.result || response.data;
@@ -162,11 +230,21 @@ export const fetchInvoiceUrl = async (codeSubscription: string | number): Promis
   console.log(`🔍 جاري جلب رابط الفاتورة للاشتراك (رقم: ${codeSubscription})...`);
   try {
     const response = await apiClient.get('/subScription/bring_url_invoice', {
-      params: { code_subscription: codeSubscription }
+      params: { code_subscription: codeSubscription },
+      timeout: 15000 // 15 ثانية timeout لأن الباك إند قد لا يرسل response عند الخطأ
     });
     console.log('📊 رابط الفاتورة:', response.data);
     return response.data;
-  } catch (error) {
+  } catch (error: any) {
+    // معالجة خطأ timeout
+    if (error.code === 'ECONNABORTED') {
+      console.error('⏱️ انتهت مهلة الاتصال بخادم الفواتير');
+      return { success: false, massege: 'انتهت مهلة الاتصال بنظام الفواتير، يرجى المحاولة لاحقاً' };
+    }
+    // معالجة أخطاء HTTP (400, 500, etc.)
+    if (error.response?.data) {
+      return { success: false, massege: error.response.data.massege || error.response.data.message || 'خطأ في جلب الفاتورة' };
+    }
     console.error('❌ خطأ في جلب رابط الفاتورة:', error);
     throw error;
   }

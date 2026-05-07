@@ -148,6 +148,7 @@ const Subscriptions = () => {
 
   // State لتتبع العمليات
   const [tranRefSearch, setTranRefSearch] = useState('');
+  const [invoiceCodeSearch, setInvoiceCodeSearch] = useState('');
   const [trackingLoading, setTrackingLoading] = useState(false);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [trackingResult, setTrackingResult] = useState(null);
@@ -217,19 +218,18 @@ const Subscriptions = () => {
 
         if (newRows.length > 0) {
           allData = [...allData, ...newRows];
-          if (newRows.length < 20) {
+          const lastItemId = newRows[newRows.length - 1]?.id;
+          // إيقاف عند: أقل من 20 نتيجة أو لم يتقدم الـ ID
+          if (newRows.length < 20 || !lastItemId || lastItemId === listId) {
             fetchMore = false;
           } else {
-            const lastItem = newRows[newRows.length - 1];
-            if (lastItem && lastItem.id) {
-              listId = lastItem.id;
-            } else {
-              fetchMore = false;
-            }
+            listId = lastItemId;
           }
         } else {
           fetchMore = false;
         }
+        // حماية قصوى
+        if (allData.length >= 1000) fetchMore = false;
       }
 
       // تجهيز البيانات المطابقة لجدول الاشتراكات النشطة
@@ -360,21 +360,18 @@ const Subscriptions = () => {
 
         if (newRows.length > 0) {
           allReports = [...allReports, ...newRows];
-          
-          // الخادم يرجع 20 سجل كحد أقصى، لو أقل يعني وصلنا للنهاية
-          if (newRows.length < 20) {
+          const lastItemId = newRows[newRows.length - 1]?.id;
+          // إيقاف عند: أقل من 20 نتيجة أو لم يتقدم الـ ID
+          if (newRows.length < 20 || !lastItemId || lastItemId === listId) {
             fetchMore = false;
           } else {
-            const lastItem = newRows[newRows.length - 1];
-            if (lastItem && lastItem.id) {
-              listId = lastItem.id;
-            } else {
-              fetchMore = false;
-            }
+            listId = lastItemId;
           }
         } else {
           fetchMore = false;
         }
+        // حماية قصوى: 1000 اشتراك كحد أقصى
+        if (allReports.length >= 1000) fetchMore = false;
       }
 
       setReportsData(allReports);
@@ -845,7 +842,7 @@ const Subscriptions = () => {
   // مكون عرض الإحصائيات
   const StatsCards = () => (
     <Grid container spacing={3} sx={{ mb: 3 }}>
-      <Grid item xs={12} sm={6} md={3}>
+      <Grid item xs={12} sm={6} md={2}>
         <Card>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -863,7 +860,7 @@ const Subscriptions = () => {
         </Card>
       </Grid>
 
-      <Grid item xs={12} sm={6} md={3}>
+      <Grid item xs={12} sm={6} md={2}>
         <Card>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -881,7 +878,7 @@ const Subscriptions = () => {
         </Card>
       </Grid>
 
-      <Grid item xs={12} sm={6} md={3}>
+      <Grid item xs={12} sm={6} md={2}>
         <Card>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -899,7 +896,7 @@ const Subscriptions = () => {
         </Card>
       </Grid>
 
-      <Grid item xs={12} sm={6} md={3}>
+      <Grid item xs={12} sm={6} md={2}>
         <Card>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -912,6 +909,42 @@ const Subscriptions = () => {
                 </Typography>
               </Box>
               <WarningIcon color="warning" />
+            </Box>
+          </CardContent>
+        </Card>
+      </Grid>
+
+      <Grid item xs={12} sm={6} md={2}>
+        <Card>
+          <CardContent>
+            <Box display="flex" alignItems="center" justifyContent="space-between">
+              <Box>
+                <Typography variant="h6" color="info.main">
+                  {(stats.totalRevenue || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  إجمالي الإيرادات
+                </Typography>
+              </Box>
+              <PaymentIcon color="info" />
+            </Box>
+          </CardContent>
+        </Card>
+      </Grid>
+
+      <Grid item xs={12} sm={6} md={2}>
+        <Card>
+          <CardContent>
+            <Box display="flex" alignItems="center" justifyContent="space-between">
+              <Box>
+                <Typography variant="h6" color="secondary.main">
+                  {(stats.averageCost || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  متوسط قيمة الاشتراك
+                </Typography>
+              </Box>
+              <AssessmentIcon color="secondary" />
             </Box>
           </CardContent>
         </Card>
@@ -1478,7 +1511,7 @@ const Subscriptions = () => {
                   }}
                 />
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                     <TextField
                       size="small"
                       label="رقم العملية (tran_ref)"
@@ -1495,12 +1528,39 @@ const Subscriptions = () => {
                     >
                       التحقق
                     </Button>
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    <TextField
+                      size="small"
+                      label="كود الاشتراك (code_subscription)"
+                      value={invoiceCodeSearch || ''}
+                      onChange={(e) => setInvoiceCodeSearch(e.target.value)}
+                      sx={{ minWidth: 220 }}
+                    />
                     <Button
                       variant="outlined"
                       color="secondary"
-                      onClick={loadInvoiceUrl}
-                      disabled={trackingLoading || invoiceLoading || !tranRefSearch.trim()}
-                      startIcon={invoiceLoading ? <CircularProgress size={20} /> : <ReceiptLongIcon />}
+                      onClick={() => {
+                        const code = (invoiceCodeSearch || '').trim();
+                        if (!code) {
+                          setNotification({ open: true, message: 'الرجاء إدخال كود الاشتراك (code_subscription)', severity: 'warning' });
+                          return;
+                        }
+                        // ابحث أولاً في البيانات المحملة عن partner_id
+                        const foundRow = reportsData.find(r => r.code_subscription === code);
+                        if (foundRow?.partner_id) {
+                          // نبني الرابط مباشرة من partner_id بدون استدعاء الباك إند
+                          const odooUrl = `https://shafaq-acc-shafaq-25386523.dev.odoo.com/my/invoices/${foundRow.partner_id}`;
+                          window.open(odooUrl, '_blank', 'noopener,noreferrer');
+                          setNotification({ open: true, message: 'تم فتح الفاتورة في نافذة جديدة', severity: 'success' });
+                        } else if (foundRow && !foundRow.partner_id) {
+                          setNotification({ open: true, message: 'هذا الاشتراك لم يتم ربطه بفاتورة في النظام المالي بعد', severity: 'warning' });
+                        } else {
+                          setNotification({ open: true, message: 'كود الاشتراك غير موجود في التقرير الحالي، يرجى التأكد من الكود', severity: 'error' });
+                        }
+                      }}
+                      disabled={!(invoiceCodeSearch || '').trim()}
+                      startIcon={<ReceiptLongIcon />}
                     >
                       عرض الفاتورة
                     </Button>
@@ -1535,13 +1595,17 @@ const Subscriptions = () => {
                 </Box>
               ) : (
                 <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflowX: 'auto' }}>
-                  <Table size="small" sx={{ minWidth: 1200 }}>
+                  <Table size="small" sx={{ minWidth: 1800 }}>
                     <TableHead>
                       <TableRow sx={{ bgcolor: 'grey.50' }}>
                         <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>الشركة</TableCell>
                         <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>كود الاشتراك</TableCell>
                         <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>الباقة</TableCell>
                         <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap', textAlign: 'center' }}>الاستخدام</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>السعر (ر.س)</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>الضريبة (ر.س)</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>الإجمالي (ر.س)</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>نوع الدفع</TableCell>
                         <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>الحالة</TableCell>
                         <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>رقم حوالة الدفع</TableCell>
                         <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>البداية / النهاية</TableCell>
@@ -1555,20 +1619,21 @@ const Subscriptions = () => {
                           const searchStr = reportsSearchQuery.toLowerCase();
 
                           // Try to find the company name safely
-                          const mappedCompany = allCompaniesList?.find?.(s => String(s.id) === String(row.company_id))?.name || '';
+                          const mappedCompanySearch = allCompaniesList?.find?.(s => String(s.id) === String(row.company_id));
+                          const mappedCompanyName = mappedCompanySearch?.NameCompany || mappedCompanySearch?.name || '';
 
                           return (
                             (row.name && row.name.toLowerCase().includes(searchStr)) ||
                             (row.code_subscription && row.code_subscription.toLowerCase().includes(searchStr)) ||
                             (row.tran_ref && row.tran_ref.toLowerCase().includes(searchStr)) ||
                             (row.name_package && row.name_package.toLowerCase().includes(searchStr)) ||
-                            (mappedCompany && mappedCompany.toLowerCase().includes(searchStr))
+                            (mappedCompanyName && mappedCompanyName.toLowerCase().includes(searchStr))
                           );
                         })
                         .map((row, index) => {
                           const mappedCompany = allCompaniesList?.find?.(c => String(c.id) === String(row.company_id));
-                          const companyNameText = mappedCompany ? mappedCompany.name : 'شركة غير متوفرة';
-                          const companyCityText = mappedCompany ? mappedCompany.city : '';
+                          const companyNameText = mappedCompany ? (mappedCompany.NameCompany || mappedCompany.name) : 'شركة غير متوفرة';
+                          const companyCityText = mappedCompany ? (mappedCompany.City || mappedCompany.city) : '';
 
                           return (
                             <TableRow key={index} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
@@ -1599,6 +1664,29 @@ const Subscriptions = () => {
                                 </Box>
                               </TableCell>
                               <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                <Typography variant="body2" fontWeight="bold">
+                                  {parseFloat(row.price || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                <Typography variant="body2">
+                                  {parseFloat(row.vat || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                <Typography variant="body2" fontWeight="bold" color="primary">
+                                  {(parseFloat(row.price || 0) + parseFloat(row.vat || 0)).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                <Chip
+                                  label={row.type === 'paid' ? 'مدفوع' : row.type === 'free' ? 'مجاني' : row.type || '—'}
+                                  color={row.type === 'paid' ? 'primary' : row.type === 'free' ? 'default' : 'default'}
+                                  size="small"
+                                  variant="outlined"
+                                />
+                              </TableCell>
+                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
                                 <Chip
                                   label={row.status === 'active' ? 'نشط' : row.status === 'inactive' ? 'غير نشط' : row.status || '—'}
                                   color={row.status === 'active' ? 'success' : 'default'}
@@ -1618,36 +1706,20 @@ const Subscriptions = () => {
                                 </Typography>
                               </TableCell>
                               <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
-                                <Tooltip title="طباعة الفاتورة">
+                                <Tooltip title={row.partner_id ? 'فتح الفاتورة في Odoo' : 'لا توجد فاتورة مرتبطة بهذا الاشتراك'}>
                                   <span>
                                     <IconButton
                                       size="small"
-                                      color="primary"
-                                      disabled={invoiceLoading || !row.code_subscription}
-                                      onClick={async () => {
-                                        setTranRefSearch(row.code_subscription);
-                                        // Directly fetch invoice url to avoid state timing issues
-                                        setInvoiceLoading(true);
-                                        try {
-                                          const invoiceResult = await fetchInvoiceUrl(row.code_subscription);
-                                          if (invoiceResult?.url) {
-                                            if (invoiceResult.url.startsWith('https://Odoo')) {
-                                              window.open(invoiceResult.url, '_blank', 'noopener,noreferrer');
-                                            } else {
-                                              setNotification({ open: true, message: 'رابط الفاتورة غير صحيح!', severity: 'error' });
-                                            }
-                                          } else {
-                                            setNotification({ open: true, message: 'لم يتم العثور على فاتورة لهذا الاشتراك', severity: 'warning' });
-                                          }
-                                        } catch (err) {
-                                          console.error('❌ Error viewing row invoice:', err);
-                                          setNotification({ open: true, message: 'فشل في جلب الفاتورة من النظام المالي', severity: 'error' });
-                                        } finally {
-                                          setInvoiceLoading(false);
-                                        }
+                                      color={row.partner_id ? 'primary' : 'default'}
+                                      disabled={!row.partner_id}
+                                      onClick={() => {
+                                        // نبني الرابط مباشرة من partner_id بدون استدعاء الباك إند
+                                        const odooUrl = `https://shafaq-acc-shafaq-25386523.dev.odoo.com/my/invoices/${row.partner_id}`;
+                                        window.open(odooUrl, '_blank', 'noopener,noreferrer');
+                                        setNotification({ open: true, message: 'تم فتح الفاتورة في نافذة جديدة', severity: 'success' });
                                       }}
                                     >
-                                      {invoiceLoading && tranRefSearch === row.code_subscription ? <CircularProgress size={16} /> : <ReceiptLongIcon />}
+                                      <ReceiptLongIcon />
                                     </IconButton>
                                   </span>
                                 </Tooltip>
@@ -1983,51 +2055,127 @@ const Subscriptions = () => {
 
       {/* حوار تفاصيل الاشتراك */}
       <Dialog open={openDetailsDialog} onClose={() => setOpenDetailsDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>تفاصيل الاشتراك</DialogTitle>
-        <DialogContent>
+        <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          تفاصيل الاشتراك
           {selectedSubscription && (
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" gutterBottom>اسم الشركة</Typography>
-                <Typography variant="body1">{selectedSubscription.companyName}</Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" gutterBottom>الباقة</Typography>
-                <Typography variant="body1">{selectedSubscription.planName}</Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" gutterBottom>تاريخ البدء</Typography>
-                <Typography variant="body1">
-                  {selectedSubscription.startDate || 'غير محدد'}
+            <Chip
+              label={getStatusText(selectedSubscription.status)}
+              color={getStatusColor(selectedSubscription.status)}
+              size="medium"
+              sx={{ fontWeight: 'bold' }}
+            />
+          )}
+        </DialogTitle>
+        <DialogContent dividers>
+          {selectedSubscription && (
+            <Grid container spacing={2.5}>
+              {/* معلومات الشركة */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
+                  معلومات الشركة
                 </Typography>
               </Grid>
               <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" gutterBottom>تاريخ الانتهاء</Typography>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>اسم الشركة</Typography>
+                <Typography variant="body1" fontWeight="bold">{selectedSubscription.companyName}</Typography>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>رقم السجل التجاري</Typography>
+                <Typography variant="body1">{selectedSubscription.registrationNumber || 'غير محدد'}</Typography>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>المدينة</Typography>
+                <Typography variant="body1">{selectedSubscription.city || 'غير محدد'}</Typography>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>الدولة</Typography>
+                <Typography variant="body1">{selectedSubscription.country || 'غير محدد'}</Typography>
+              </Grid>
+
+              <Grid item xs={12}><Divider /></Grid>
+
+              {/* معلومات الاشتراك */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
+                  معلومات الاشتراك
+                </Typography>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>الباقة</Typography>
+                <Chip label={selectedSubscription.planName} color="secondary" variant="outlined" />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>طريقة الدفع</Typography>
+                <Typography variant="body1">{selectedSubscription.paymentMethod}</Typography>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>تاريخ البدء</Typography>
+                <Typography variant="body1">{selectedSubscription.startDate || 'غير محدد'}</Typography>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>تاريخ الانتهاء</Typography>
                 <Typography variant="body1">
                   {selectedSubscription.endDate || 'غير محدد'}
+                  {selectedSubscription.endDate && (() => {
+                    const days = getDaysRemaining(selectedSubscription.endDate);
+                    if (days > 0) return ` (${days} يوم متبقي)`;
+                    if (days < 0) return ` (منتهي منذ ${Math.abs(days)} يوم)`;
+                    return ' (ينتهي اليوم)';
+                  })()}
                 </Typography>
               </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" gutterBottom>المبلغ</Typography>
-                <Typography variant="body1">{selectedSubscription.amount.toLocaleString('en-GB')} ر.س</Typography>
+
+              <Grid item xs={12}><Divider /></Grid>
+
+              {/* المعلومات المالية */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
+                  المعلومات المالية
+                </Typography>
               </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" gutterBottom>الحالة</Typography>
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>السعر (بدون ضريبة)</Typography>
+                <Typography variant="body1" fontWeight="bold">{selectedSubscription.amount.toLocaleString('en-GB', { minimumFractionDigits: 2 })} ر.س</Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>ضريبة القيمة المضافة (15%)</Typography>
+                <Typography variant="body1">{(selectedSubscription.amount * 0.15).toLocaleString('en-GB', { minimumFractionDigits: 2 })} ر.س</Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>الإجمالي شامل الضريبة</Typography>
+                <Typography variant="h6" color="primary" fontWeight="bold">{(selectedSubscription.amount * 1.15).toLocaleString('en-GB', { minimumFractionDigits: 2 })} ر.س</Typography>
+              </Grid>
+
+              <Grid item xs={12}><Divider /></Grid>
+
+              {/* استخدام المشاريع */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" fontWeight="bold" color="primary" gutterBottom>
+                  استخدام المشاريع
+                </Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>المشاريع المسموح بها</Typography>
+                <Typography variant="body1" fontWeight="bold">{selectedSubscription.branchesAllowed}</Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>المشاريع المستخدمة</Typography>
+                <Typography variant="body1" fontWeight="bold">{selectedSubscription.currentBranches}</Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>المتبقي</Typography>
                 <Chip
-                  label={getStatusText(selectedSubscription.status)}
-                  color={getStatusColor(selectedSubscription.status)}
+                  label={`${selectedSubscription.remainingBranches} مشروع متبقي`}
+                  color={selectedSubscription.remainingBranches > 0 ? 'success' : 'error'}
+                  variant="outlined"
                   size="small"
-                  sx={{
-                    fontWeight: 'bold',
-                    minWidth: '80px'
-                  }}
                 />
               </Grid>
             </Grid>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenDetailsDialog(false)}>إغلاق</Button>
+          <Button onClick={() => setOpenDetailsDialog(false)} variant="contained">إغلاق</Button>
         </DialogActions>
       </Dialog>
 
