@@ -176,6 +176,40 @@ export interface CompanyFullReportResponse {
 }
 
 // APIs الشركات
+// دالة مساعدة لإزالة تكرار الفروع واختيار المدير الصحيح
+const deduplicateBranches = (branches: Branch[]): Branch[] => {
+  if (!branches || !Array.isArray(branches)) return [];
+  
+  const uniqueBranchesMap = new Map<number, Branch>();
+  
+  branches.forEach(branch => {
+    if (!uniqueBranchesMap.has(branch.id)) {
+      uniqueBranchesMap.set(branch.id, { ...branch });
+    } else {
+      // إذا كان الفرع موجوداً مسبقاً، نتحقق من اسم المدير
+      const existingBranch = uniqueBranchesMap.get(branch.id)!;
+      const newManager = branch.manager?.trim() || "";
+      const oldManager = existingBranch.manager?.trim() || "";
+      
+      // إذا كان المدير القديم هو "Software Engineer" أو فارغ، والمدير الجديد اسم حقيقي، نحدثه
+      const isOldManagerInvalid = !oldManager || oldManager.toLowerCase() === 'software engineer';
+      const isNewManagerValid = newManager && newManager.toLowerCase() !== 'software engineer';
+      
+      if (isOldManagerInvalid && isNewManagerValid) {
+        existingBranch.manager = newManager;
+      }
+    }
+  });
+  
+  // تصفية أي مدير باسم "Software Engineer" متبقي
+  return Array.from(uniqueBranchesMap.values()).map(branch => {
+    if (branch.manager && branch.manager.toLowerCase() === 'software engineer') {
+      return { ...branch, manager: "" }; // إزالة الاسم الوهمي
+    }
+    return branch;
+  });
+};
+
 export const companiesSubscribedApi = {
   // جلب جميع الشركات مع pagination
   async getCompanies(params: {
@@ -285,127 +319,106 @@ export const companiesSubscribedApi = {
 
 
 
-  // جلب مشاريع فرع محدد مع دعم عدد غير محدود من المشاريع
-  async getBranchProjects(IDCompany: number, branchId: number, lastId = 0, limit = 10, includeDisabled = false): Promise<ApiResponse<Project[]>> {
+  // جلب المشاريع المغلقة للفرع
+  async getClosedBranchProjects(branchId: number): Promise<any[]> {
     try {
-      // طبقة كاش خفيفة في الفرونت لتقليل الضغط (stale-while-revalidate بسيط)
-      const CACHE_TTL_MS = 2 * 60 * 1000; // دقيقتان
-      const cacheKey = `v2:branchProjects:${IDCompany}:${branchId}:${lastId}:${limit}:${includeDisabled ? 1 : 0}`;
-      try {
-        const cachedRaw = localStorage.getItem(cacheKey);
-        if (cachedRaw) {
-          const cached = JSON.parse(cachedRaw);
-          if (cached && Array.isArray(cached.data) && typeof cached.ts === 'number' && (Date.now() - cached.ts) < CACHE_TTL_MS) {
-            return { success: true, data: cached.data };
-          }
-        }
-      } catch { }
-      // نحاول جلب المشاريع على دفعات صغيرة متعددة لتجاوز قيد LIMIT 3
-      const allProjects: any[] = [];
-      let currentLastId = lastId;
-      const batchSize = 3; // حجم الدفعة الواحدة من الـ backend
-      const targetSize = Math.min(limit, 10); // الحد الأقصى المطلوب
-      let consecutiveEmptyBatches = 0; // عداد الدفعات الفارغة المتتالية
-      const maxIterations = 100; // رفع الحد بشكل كبير لدعم عدد كبير من المشاريع
-      let iterations = 0;
+      let closedProjects: any[] = [];
+      let IDfinlty = 0;
+      let hasMore = true;
+      let safetyLimit = 0;
 
-      // جلب المشاريع على دفعات
-      while (allProjects.length < targetSize && iterations < maxIterations) {
-        iterations++;
-
-        const response = await apiClient.get("/brinshCompany/BringProject", {
-          params: {
-            IDcompanySub: branchId,
-            IDfinlty: currentLastId,
-            type: "cache",
-          }
+      while (hasMore && safetyLimit < 10) { // حد أقصى للحماية
+        safetyLimit++;
+        const response = await apiClient.get('/brinshCompany/BringDataprojectClosed', {
+          params: { IDCompanySub: branchId, IDfinlty }
         });
-
-        if (!response.data?.success) {
-          break;
-        }
-
-        const batchProjects = response.data.data || [];
-
-        if (batchProjects.length === 0) {
-          consecutiveEmptyBatches++;
-
-          // إذا حصلنا على 5 دفعات فارغة متتالية، نعتبر أننا وصلنا للنهاية
-          if (consecutiveEmptyBatches >= 5) {
-            break;
-          }
-
-          // جرب زيادة last_id بقفزة أكبر في حالة وجود فجوات في البيانات
-          currentLastId += 5;
-          continue;
-        }
-
-        // إعادة تعيين عداد الدفعات الفارغة
-        consecutiveEmptyBatches = 0;
-
-        // إضافة المشاريع الجديدة (تجنب التكرار)
-        const newProjects = batchProjects.filter((newProject: any) =>
-          !allProjects.some(existingProject => existingProject.id === newProject.id)
-        );
-
-
-
-        allProjects.push(...newProjects);
-
-        // تحديث currentLastId لآخر مشروع في الدفعة
-        if (batchProjects.length > 0) {
-          const lastProjectInBatch = batchProjects[batchProjects.length - 1];
-          const newLastId = lastProjectInBatch.id;
-
-          // تأكد من أن last_id يتقدم
-          if (newLastId <= currentLastId) {
-            currentLastId = currentLastId + 5;
+        
+        if (response.data && response.data.data && Array.isArray(response.data.data)) {
+          const batch = response.data.data;
+          if (batch.length === 0) {
+            hasMore = false;
           } else {
-            currentLastId = newLastId;
+            const transformedBatch = batch.map((p: any) => ({
+              id: p.ProjectID || p.id,
+              Nameproject: p.Nameproject,
+              name: p.Nameproject,
+              Disabled: 'false', // لأنها مغلقة
+              rate: p.rate || 0,
+              IDcompanySub: branchId
+            }));
+            
+            closedProjects = [...closedProjects, ...transformedBatch];
+            IDfinlty = batch[batch.length - 1].ProjectID || batch[batch.length - 1].id;
           }
-        }
-
-        // إذا حصلنا على أقل من 3 مشاريع، قد نكون وصلنا للنهاية
-        // لكن تابع المحاولة للتأكد (قد توجد فجوات في البيانات)
-        if (batchProjects.length < batchSize) {
-          console.log('📉 دفعة جزئية، محاولة المتابعة للتأكد من عدم وجود مشاريع أخرى');
-          // لا نتوقف مباشرة، نعطي فرص أكثر
-        }
-
-        // حماية من الحلقة اللانهائية - حد مرن يمكن رفعه حسب الحاجة
-        if (allProjects.length >= 1000) {
-          console.warn('⚠️ تم الوصول للحد الأقصى الأمني (1000 مشروع) - إيقاف لحماية الأداء');
-          break;
+        } else {
+          hasMore = false;
         }
       }
+      return closedProjects;
+    } catch (error) {
+      console.error("خطأ في جلب المشاريع المغلقة:", error);
+      return [];
+    }
+  },
 
-      // فلترة المشاريع المُعطَّلة إذا لم يكن مطلوباً إدراجها
-      let filteredProjects = allProjects;
-      if (!includeDisabled) {
-        // تطبيق فلترة للمشاريع النشطة فقط
-        // في قاعدة البيانات: disabled = true يعني نشط، disabled = false يعني متوقف
-        filteredProjects = allProjects.filter(project => {
+  // جلب مشاريع فرع محدد
+  async getBranchProjects(IDCompany: number, branchId: number, lastId = 0, limit = 10, includeDisabled = false): Promise<ApiResponse<Project[]>> {
+    try {
+      // استخدام endpoint v2/FilterProject الذي يتجاوز فلترة رقم الهاتف في الباك إند
+      const response = await apiClient.get("/brinshCompany/v2/FilterProject", {
+        params: {
+          IDCompany: IDCompany,
+          IDCompanySub: branchId,
+          search: ""
+        }
+      });
+
+      if (!response.data || !response.data.data) {
+        return { success: false, error: "حدث خطأ أثناء جلب مشاريع الفرع" };
+      }
+
+      let allProjects: any[] = response.data.data || [];
+
+      // إزالة التكرار (لأن الـ query في الباك إند قد يكرر المشاريع بسبب usersCompany)
+      const uniqueProjectsMap = new Map();
+      for (const proj of allProjects) {
+        if (!uniqueProjectsMap.has(proj.id)) {
+          uniqueProjectsMap.set(proj.id, proj);
+        }
+      }
+      allProjects = Array.from(uniqueProjectsMap.values());
+
+      // جلب وإضافة المشاريع المغلقة إذا تم طلبها
+      if (includeDisabled) {
+        const closedProjects = await this.getClosedBranchProjects(branchId);
+        const activeIds = new Set(allProjects.map(p => p.id));
+        for (const cp of closedProjects) {
+          if (!activeIds.has(cp.id)) {
+            allProjects.push(cp);
+          }
+        }
+      } else {
+        // فلترة المشاريع المُعطَّلة إذا لم يكن مطلوباً إدراجها
+        allProjects = allProjects.filter((project: any) => {
           const disabled = project.Disabled;
           const isActive = disabled === true || disabled === 'true' || Number(disabled) === 1 || disabled === '1';
           return isActive;
         });
-
       }
 
-      // قطع النتائج حسب الحجم المطلوب
-      const finalProjects = filteredProjects.slice(0, targetSize);
+      // بما أن هذا الـ endpoint يُرجع جميع المشاريع بدون pagination، نقوم باقتطاع الصفحة المطلوبة
+      // lastId هنا هو ID آخر مشروع في الصفحة السابقة (cursor)
+      let startIndex = 0;
+      if (lastId > 0) {
+        const lastItemIndex = allProjects.findIndex(p => p.id === lastId);
+        if (lastItemIndex !== -1) {
+          startIndex = lastItemIndex + 1;
+        }
+      }
 
+      const paginatedProjects = allProjects.slice(startIndex, startIndex + limit);
 
-
-      // تخزين في الكاش
-      try {
-        localStorage.setItem(cacheKey, JSON.stringify({ data: finalProjects, ts: Date.now() }));
-      } catch { }
-
-      return {
-        success: true,
-        data: finalProjects
-      };
+      return { success: true, data: paginatedProjects };
     } catch (error: any) {
       return {
         success: false,
@@ -449,12 +462,12 @@ export const companiesSubscribedApi = {
     }
   },
 
-  // البحث داخل مشاريع الفرع على دفعات (batching) عبر BringProject ثم فلترة محلية
+  // البحث داخل مشاريع الفرع على دفعات - يستخدم endpoint v2/FilterProject الذي لا يفلتر بالهاتف
   async searchBranchProjectsBatched(
     IDCompany: number,
     branchId: number,
     searchTerm: string,
-    includeDisabled: boolean = false,
+    includeDisabled: boolean = true,
     limitResults: number = 50
   ): Promise<ApiResponse<Project[]>> {
     try {
@@ -462,82 +475,56 @@ export const companiesSubscribedApi = {
         return { success: true, data: [] };
       }
 
-      const term = searchTerm.toLowerCase();
-      const allMatched: any[] = [];
-      let currentLastId = 0;
-      const batchSizeBackend = 3;
-      let consecutiveEmptyBatches = 0;
-      const maxIterations = 1000;
-      let iterations = 0;
-
-      while (allMatched.length < limitResults && iterations < maxIterations) {
-        iterations++;
-        const response = await apiClient.get("/brinshCompany/BringProject", {
-          params: {
-            IDcompanySub: branchId,
-            IDfinlty: currentLastId,
-            type: "cache"
-          }
-        });
-
-        if (!response.data?.success) {
-          break;
+      const response = await apiClient.get("/brinshCompany/v2/FilterProject", {
+        params: {
+          IDCompany: IDCompany,
+          IDCompanySub: branchId,
+          search: searchTerm
         }
+      });
 
-        const batchProjects = response.data?.data || [];
-        if (batchProjects.length === 0) {
-          consecutiveEmptyBatches++;
-          if (consecutiveEmptyBatches >= 5) break;
-          currentLastId += 5;
-          continue;
+      let batchProjects = response.data?.data || [];
+
+      // إذا كان مطلوباً إظهار المشاريع المغلقة، نجلبها ونفلترها محلياً
+      if (includeDisabled) {
+        const closedProjects = await this.getClosedBranchProjects(branchId);
+        const term = searchTerm.toLowerCase();
+        const matchedClosed = closedProjects.filter(p => 
+          (p.Nameproject && p.Nameproject.toLowerCase().includes(term)) ||
+          (p.name && p.name.toLowerCase().includes(term))
+        );
+        batchProjects = [...batchProjects, ...matchedClosed];
+      }
+
+      // إزالة التكرار
+      const uniqueProjectsMap = new Map();
+      for (const proj of batchProjects) {
+        if (!uniqueProjectsMap.has(proj.id)) {
+          uniqueProjectsMap.set(proj.id, proj);
         }
+      }
+      let filteredBatch = Array.from(uniqueProjectsMap.values());
 
-        consecutiveEmptyBatches = 0;
-
-        // فلترة بالبحث ضمن الدفعة فقط
-        const filteredBatch = batchProjects.filter((p: any) => {
-          const matches = (
-            String(p.Nameproject || '').toLowerCase().includes(term) ||
-            String(p.TypeOFContract || '').toLowerCase().includes(term) ||
-            String(p.LocationProject || '').toLowerCase().includes(term) ||
-            String(p.Note || '').toLowerCase().includes(term) ||
-            (p.Referencenumber !== undefined && p.Referencenumber !== null && String(p.Referencenumber).toLowerCase().includes(term))
-          );
-          if (!matches) return false;
-          if (includeDisabled) return true;
+      // فلترة بحسب حالة التفعيل إذا كان includeDisabled = false
+      if (!includeDisabled) {
+        filteredBatch = filteredBatch.filter((p: any) => {
           const d = p.Disabled;
-          const isActive = d === true || d === 'true' || Number(d) === 1 || d === '1';
-          return isActive;
+          return d === true || d === 'true' || Number(d) === 1 || d === '1';
         });
-
-        // دمج بدون تكرار
-        for (const proj of filteredBatch) {
-          if (!allMatched.some((x) => x.id === proj.id)) {
-            allMatched.push(proj);
-            if (allMatched.length >= limitResults) break;
-          }
-        }
-
-        // تحديث lastId للدفعة التالية
-        const lastProjectInBatch = batchProjects[batchProjects.length - 1];
-        const newLastId = lastProjectInBatch?.id ?? currentLastId;
-        currentLastId = newLastId <= currentLastId ? currentLastId + 5 : newLastId;
-
-        // حد أمان كبير
-        if (currentLastId > 1000000000) break;
       }
 
       return {
         success: true,
-        data: allMatched.slice(0, limitResults)
+        data: filteredBatch.slice(0, limitResults)
       };
     } catch (error: any) {
       return {
         success: false,
-        error: error.response?.data?.error || error.message || "حدث خطأ أثناء البحث على دفعات في مشاريع الفرع",
+        error: error.response?.data?.error || error.message || "حدث خطأ أثناء البحث في مشاريع الفرع",
       };
     }
   },
+
 
   // إنشاء مشروع جديد
   async createProject(projectData: {
@@ -1836,9 +1823,12 @@ export const companiesSubscribedApi = {
       });
 
       if (response.data) {
+        const rawData = response.data.data || response.data;
+        const cleanedData = deduplicateBranches(rawData);
+        
         return {
           success: true,
-          data: response.data.data || response.data,
+          data: cleanedData,
           message: response.data.message
         };
       } else {
@@ -2422,49 +2412,29 @@ export const companiesSubscribedApi = {
     }
   },
 
-  // جلب العدد الفعلي للمشاريع لكل فرع (نسخة سريعة ومحسنة)
+  // جلب العدد الفعلي للمشاريع لكل فرع (نسخة سريعة ومحسنة تستخدم v2/FilterProject)
   async getBranchProjectsActualCount(IDCompany: number, branchId: number): Promise<ApiResponse<{ count: number }>> {
     try {
-      // جلب دفعة واحدة فقط للتحقق السريع (بدلاً من جلب كل المشاريع)
-      let totalCount = 0;
-      let currentLastId = 0;
-      const maxBatches = 10; // الحد الأقصى 10 دفعات فقط (أسرع بكثير)
-
-      for (let i = 0; i < maxBatches; i++) {
-        const response = await apiClient.get("/brinshCompany/BringProject", {
-          params: {
-            IDcompanySub: branchId,
-            IDfinlty: currentLastId,
-            type: "cache"
-          }
-        });
-
-        if (!response.data?.success) {
-          break;
+      const response = await apiClient.get("/brinshCompany/v2/FilterProject", {
+        params: {
+          IDCompany: IDCompany,
+          IDCompanySub: branchId,
+          search: ""
         }
+      });
 
-        const batchProjects = response.data.data || [];
+      const batch = response.data?.data || [];
 
-        if (batchProjects.length === 0) {
-          break;
-        }
-
-        totalCount += batchProjects.length;
-
-        // تحديث last_id للدفعة التالية
-        const lastProject = batchProjects[batchProjects.length - 1];
-        currentLastId = lastProject.id || (currentLastId + batchProjects.length);
-
-        // إذا كانت الدفعة أقل من 3، فقد وصلنا للنهاية
-        if (batchProjects.length < 3) {
-          break;
-        }
+      // إزالة التكرار للحصول على عدد دقيق
+      const uniqueProjects = new Set(batch.map((p: any) => p.id));
+      
+      // جلب المشاريع المغلقة لإضافتها إلى العدد الإجمالي كما طلب المستخدم
+      const closedProjects = await this.getClosedBranchProjects(branchId);
+      for (const cp of closedProjects) {
+        uniqueProjects.add(cp.id);
       }
 
-      return {
-        success: true,
-        data: { count: totalCount }
-      };
+      return { success: true, data: { count: uniqueProjects.size } };
     } catch (error: any) {
       console.error("خطأ في جلب عدد مشاريع الفرع:", error);
       return {
@@ -2514,9 +2484,9 @@ export const companiesSubscribedApi = {
       // فقد نحتاج لعمل استعلام مباشر إذا كنا في وضع الـ Admin
       // للأسف الـ endpoint الحالي للـ dashboard قد لا يوفر هذه المعلومة بسهولة بدون تعديل الباك اند.
       // سنحاول استخدام ما وجدناه في تفاصيل الشركة أولاً كحل مؤقت إذا كان يعيد الاشتراك.
-      
+
       const response = await apiClient.get(`/companies/${companyId}/details`);
-      
+
       // القيمة الافتراضية
       return {
         success: true,
@@ -2536,7 +2506,7 @@ export const companiesSubscribedApi = {
     }
   },
 
-  
+
   // ===== APIs الجديدة =====
 
   /**

@@ -777,7 +777,6 @@ const BranchesView: React.FC<BranchesViewProps> = ({
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => openBranchDialog()}
-            disabled={company.branchesCount >= company.branchesAllowed}
           >
             إضافة فرع
           </Button>
@@ -860,11 +859,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({
           </Grid>
         </Collapse>
         
-        {company.branchesCount >= company.branchesAllowed && (
-          <Typography variant="caption" color="warning.main" sx={{ mt: 1, display: 'block' }}>
-            ⚠️ تم الوصول للحد الأقصى من الفروع المسموحة ({company.branchesAllowed} فرع)
-          </Typography>
-        )}
+
       </Paper>
 
 
@@ -1117,10 +1112,9 @@ const BranchesView: React.FC<BranchesViewProps> = ({
                   variant="outlined"
                   startIcon={<AddIcon />}
                   onClick={() => openBranchDialog()}
-                          sx={{ mt: 1 }}
-                  disabled={company.branchesCount >= company.branchesAllowed}
+                  sx={{ mt: 1 }}
                 >
-                          إضافة فرع جديد
+                  إضافة فرع جديد
                 </Button>
                       </>
               )}

@@ -188,6 +188,7 @@ const Subscriptions = () => {
   // State للتحديث
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(new Date());
+  // eslint-disable-next-line no-unused-vars
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
 
   // جلب البيانات بالآلية الجديدة التدريجية (Progressive Fetching) والفلترة محلياً
@@ -204,7 +205,8 @@ const Subscriptions = () => {
       let fetchMore = true;
       let listId = 0;
       let allData = [];
-      const type = filterStatus === 'all' ? 2 : 1; 
+      // دائماً نجلب الكل (type=2) ثم نفلتر محلياً لمعالجة الباقات المدفوعة بحالة inactive خاطئة
+      const type = 2;
 
       while (fetchMore) {
         const result = await fetchSubscriptionReports(type, listId);
@@ -230,13 +232,38 @@ const Subscriptions = () => {
         } else {
           fetchMore = false;
         }
-        // حماية قصوى
-        if (allData.length >= 1000) fetchMore = false;
+        // تم إزالة الحماية القصوى بناءً على طلب المستخدم
       }
 
       // تجهيز البيانات المطابقة لجدول الاشتراكات النشطة
+      const now = new Date();
       const mapped = allData.map(item => {
         const company = currentCompanies.find(c => String(c.id) === String(item.company_id)) || {};
+
+        // نعتبر الباقة "نشطة فعلياً" إذا:
+        // 1) حقل status = 'active' في قاعدة البيانات
+        const endDateObj = item.end_date ? new Date(item.end_date) : null;
+        const isEffectivelyActive = item.status === 'active';
+
+        let finalStatus = 'inactive';
+        if (isEffectivelyActive) {
+          if (endDateObj) {
+            const diffTime = endDateObj.getTime() - now.getTime();
+            const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (daysRemaining > 0 && daysRemaining <= 30) {
+              finalStatus = 'expiring';
+            } else if (daysRemaining <= 0) {
+              finalStatus = 'expired';
+            } else {
+              finalStatus = 'active';
+            }
+          } else {
+            finalStatus = 'active';
+          }
+        } else {
+          finalStatus = 'expired';
+        }
+
         return {
           id: item.id,
           companyId: item.company_id,
@@ -245,7 +272,9 @@ const Subscriptions = () => {
           startDate: item.start_date || '',
           endDate: item.end_date || '',
           amount: parseFloat(item.price) || 0,
-          status: item.status || 'unknown',
+          // نعرض الحالة الفعلية للمستخدم بناءً على المنطق الصحيح
+          status: finalStatus,
+          tran_ref: item.tran_ref || '',
           autoRenew: false,
           paymentMethod: 'تحويل بنكي',
           branchesAllowed: item.project_count || 0,
@@ -275,7 +304,7 @@ const Subscriptions = () => {
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(sub => 
+      filtered = filtered.filter(sub =>
         sub.companyName.toLowerCase().includes(q) ||
         sub.planName.toLowerCase().includes(q) ||
         sub.city.toLowerCase().includes(q) ||
@@ -291,7 +320,7 @@ const Subscriptions = () => {
       filtered.sort((a, b) => {
         let valA = a[sortBy];
         let valB = b[sortBy];
-        
+
         if (sortBy === 'endDate' || sortBy === 'startDate') {
           valA = new Date(valA || 0).getTime();
           valB = new Date(valB || 0).getTime();
@@ -342,16 +371,25 @@ const Subscriptions = () => {
     }
   };
 
+  // ===== دالة مساعدة: هل الباقة نشطة فعلياً؟ =====
+  // تعتبر الباقة نشطة إذا:
+  //   1) status = 'active' في قاعدة البيانات
+  const isEffectivelyActive = (row) => {
+    return row.status === 'active';
+  };
+
   // جلب تقارير الاشتراكات بتدريج لضمان الحصول على كافة النتائج
+  // type: 1 = نشطة فقط (فلترة محلية), 2 = الكل — نرسل دائماً type=2 للباك إند ونفلتر هنا
   const loadReports = async (type) => {
     setReportsLoading(true);
     try {
       let fetchMore = true;
       let listId = 0;
-      let allReports = [];
+      let allRaw = [];
 
+      // دائماً نجلب الكل من الباك إند لتجنّب استبعاد الباقات المدفوعة بحالة inactive خاطئة
       while (fetchMore) {
-        const result = await fetchSubscriptionReports(type, listId);
+        const result = await fetchSubscriptionReports(2, listId);
         let newRows = [];
 
         // تحليل البيانات المرجعة بناءً على تنسيقات الـ API المحتملة
@@ -364,9 +402,8 @@ const Subscriptions = () => {
         }
 
         if (newRows.length > 0) {
-          allReports = [...allReports, ...newRows];
+          allRaw = [...allRaw, ...newRows];
           const lastItemId = newRows[newRows.length - 1]?.id;
-          // إيقاف عند: أقل من 20 نتيجة أو لم يتقدم الـ ID
           if (newRows.length < 20 || !lastItemId || lastItemId === listId) {
             fetchMore = false;
           } else {
@@ -375,9 +412,18 @@ const Subscriptions = () => {
         } else {
           fetchMore = false;
         }
-        // حماية قصوى: 1000 اشتراك كحد أقصى
-        if (allReports.length >= 1000) fetchMore = false;
+        // تم إزالة الحماية القصوى بناءً على طلب المستخدم
       }
+
+      // فلترة محلية احترافية:
+      //   type=1 → اعرض فقط الباقات النشطة فعلياً (status=active أو مدفوعة+غير منتهية)
+      //   type=2 → اعرض الكل
+      //   type=3 → اعرض الباقات التي لديها فاتورة (مرتبطة بـ Odoo)
+      const allReports = type === 1
+        ? allRaw.filter(row => isEffectivelyActive(row))
+        : type === 3
+          ? allRaw.filter(row => row.partner_id && row.code_subscription && row.status === 'active')
+          : allRaw;
 
       setReportsData(allReports);
     } catch (err) {
@@ -442,6 +488,7 @@ const Subscriptions = () => {
   };
 
   // جلب الفاتورة وفتحها في نافذة جديدة
+  // eslint-disable-next-line no-unused-vars
   const loadInvoiceUrl = async () => {
     if (!tranRefSearch.trim()) {
       setNotification({ open: true, message: 'الرجاء إدخال رقم كود الاشتراك (code_subscription)', severity: 'warning' });
@@ -474,6 +521,7 @@ const Subscriptions = () => {
     if (activeTab === 2) {
       loadReports(reportType);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, reportType]);
 
   // جلب أنواع الاشتراكات عند فتح تبويب إضافة اشتراك
@@ -649,7 +697,7 @@ const Subscriptions = () => {
       }
 
       setOpenTypeDialog(false);
-      
+
       // تأخير جلب البيانات لثانيتين حتى يكتمل إقلاع الباك إند بعد نجاح العملية
       setTimeout(() => {
         loadSubscriptionTypes();
@@ -711,6 +759,7 @@ const Subscriptions = () => {
     if (activeTab === 2) {
       loadReports(reportType);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportType, activeTab]);
 
   // دالة تجديد الاشتراك
@@ -1080,7 +1129,7 @@ const Subscriptions = () => {
                   >
                     <BusinessIcon />
                   </Badge>
-                  <span>الاشتراكات النشطة</span>
+                  <span>سجل الاشتراكات</span>
                 </Box>
               }
             />
@@ -1104,7 +1153,7 @@ const Subscriptions = () => {
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <AssessmentIcon />
-                  <span>التقارير</span>
+                  <span>الباقات</span>
                 </Box>
               }
             />
@@ -1120,7 +1169,7 @@ const Subscriptions = () => {
                   >
                     <PaymentIcon />
                   </Badge>
-                  <span>أنواع الاشتراكات</span>
+                  <span>أنواع الباقات</span>
                 </Box>
               }
             />
@@ -1128,7 +1177,7 @@ const Subscriptions = () => {
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <AddIcon />
-                  <span>إضافة اشتراك لشركة</span>
+                  <span>إضافة باقة لشركة</span>
                 </Box>
               }
             />
@@ -1162,7 +1211,7 @@ const Subscriptions = () => {
       {/* المحتوى حسب التبويب */}
       <Card>
         <CardContent>
-          {/* التبويب الأول: الاشتراكات النشطة */}
+          {/* التبويب الأول: سجل الاشتراكات */}
           {activeTab === 0 && (
             loading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -1175,14 +1224,14 @@ const Subscriptions = () => {
             ) : (
               <>
                 <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-                  الاشتراكات النشطة ({stats.activeSubscriptions || stats.totalCompanies || 0} إجمالي، {subscriptions?.length || 0} في هذه الصفحة)
+                  سجل الاشتراكات ({stats.activeSubscriptions || stats.totalCompanies || 0} إجمالي، {subscriptions?.length || 0} في هذه الصفحة)
                 </Typography>
                 <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
                   <Table
                     size="small"
                     sx={{
                       minWidth: { xs: 600, md: 900 },
-                      '& th, & td': { whiteSpace: 'nowrap', fontSize: { xs: '0.8rem', sm: '0.9rem' }, py: { xs: 0.75, sm: 1 } }
+                      '& th, & td': { fontSize: { xs: '0.8rem', sm: '0.9rem' }, py: { xs: 0.75, sm: 1 } }
                     }}
                   >
                     <TableHead>
@@ -1391,86 +1440,86 @@ const Subscriptions = () => {
                           );
                         })
                         .map((request) => (
-                        <TableRow key={request.id}>
-                          <TableCell>
-                            <Box>
-                              <Typography variant="subtitle2" fontWeight="bold">
-                                {request.companyName}
+                          <TableRow key={request.id}>
+                            <TableCell>
+                              <Box>
+                                <Typography variant="subtitle2" fontWeight="bold">
+                                  {request.companyName}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {request.registrationNumber || 'غير محدد'}
+                                </Typography>
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={request.planType || 'أساسي'}
+                                color="info"
+                                variant="outlined"
+                                size="small"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              {new Date(request.requestDate).toLocaleDateString('en-GB')}
+                            </TableCell>
+                            <TableCell>
+                              {request.duration || '12'} شهر
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" fontWeight="bold" color="primary.main">
+                                {(request.amount || 0).toLocaleString('en-GB')} ر.س
                               </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {request.registrationNumber || 'غير محدد'}
-                              </Typography>
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label={request.planType || 'أساسي'}
-                              color="info"
-                              variant="outlined"
-                              size="small"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            {new Date(request.requestDate).toLocaleDateString('en-GB')}
-                          </TableCell>
-                          <TableCell>
-                            {request.duration || '12'} شهر
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" fontWeight="bold" color="primary.main">
-                              {(request.amount || 0).toLocaleString('en-GB')} ر.س
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Box>
-                              <Typography variant="body2">
-                                {request.contactEmail || 'غير محدد'}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary" dir="ltr">
-                                {request.contactPhone || 'غير محدد'}
-                              </Typography>
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                              <Tooltip title="قبول الطلب">
-                                <IconButton
-                                  size="small"
-                                  color="success"
-                                  onClick={() => handleApproveRequest(request.id)}
-                                >
-                                  <CheckIcon />
-                                </IconButton>
-                              </Tooltip>
+                            </TableCell>
+                            <TableCell>
+                              <Box>
+                                <Typography variant="body2">
+                                  {request.contactEmail || 'غير محدد'}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" dir="ltr">
+                                  {request.contactPhone || 'غير محدد'}
+                                </Typography>
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Tooltip title="قبول الطلب">
+                                  <IconButton
+                                    size="small"
+                                    color="success"
+                                    onClick={() => handleApproveRequest(request.id)}
+                                  >
+                                    <CheckIcon />
+                                  </IconButton>
+                                </Tooltip>
 
-                              <Tooltip title="حذف طلب">
-                                <IconButton
-                                  size="small"
-                                  color="error"
-                                  onClick={() => {
-                                    setSelectedRequest(request);
-                                    setOpenRequestDialog(true);
-                                  }}
-                                >
-                                  <CloseIcon />
-                                </IconButton>
-                              </Tooltip>
+                                <Tooltip title="حذف طلب">
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => {
+                                      setSelectedRequest(request);
+                                      setOpenRequestDialog(true);
+                                    }}
+                                  >
+                                    <CloseIcon />
+                                  </IconButton>
+                                </Tooltip>
 
-                              <Tooltip title="عرض التفاصيل">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => {
-                                    setSelectedRequest(request);
-                                    setOpenRequestDetailsDialog(true);
-                                  }}
-                                >
-                                  <VisibilityIcon />
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
-                          </TableCell>
-                        </TableRow>
-                      ))
+                                <Tooltip title="عرض التفاصيل">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => {
+                                      setSelectedRequest(request);
+                                      setOpenRequestDetailsDialog(true);
+                                    }}
+                                  >
+                                    <VisibilityIcon />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        ))
                     )}
                   </TableBody>
                 </Table>
@@ -1478,16 +1527,16 @@ const Subscriptions = () => {
             </>
           )}
 
-          {/* التبويب الثالث: التقارير */}
+          {/* التبويب الثالث: الباقات */}
           {activeTab === 2 && (
             <Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  تقارير الشركات المشتركة
+                  تفاصيل الباقات المشتركة
                 </Typography>
                 <TextField
                   size="small"
-                  label="البحث في التقارير (اسم الشركة، رقم الشركة...)"
+                  label="البحث في الباقات (اسم الشركة، كود الاشتراك...)"
                   value={reportsSearchQuery}
                   onChange={(e) => setReportsSearchQuery(e.target.value)}
                   sx={{ width: { xs: '100%', sm: 300 } }}
@@ -1537,8 +1586,8 @@ const Subscriptions = () => {
                         }
                         // التحقق من وجود الاشتراك في البيانات المحملة
                         const foundRow = reportsData.find(r => r.code_subscription === code);
-                        if (foundRow && !foundRow.partner_id) {
-                          setNotification({ open: true, message: 'هذا الاشتراك لم يتم ربطه بفاتورة في النظام المالي بعد', severity: 'warning' });
+                        if (foundRow && (!foundRow.partner_id || foundRow.status !== 'active')) {
+                          setNotification({ open: true, message: 'هذا الاشتراك لم يتم دفع فاتورته في النظام المالي بعد', severity: 'warning' });
                           return;
                         }
                         if (!foundRow) {
@@ -1577,6 +1626,7 @@ const Subscriptions = () => {
                     >
                       <MenuItem value={1}>الباقات المفعلة</MenuItem>
                       <MenuItem value={2}>كل الباقات</MenuItem>
+                      <MenuItem value={3}>الباقات التي لديها فاتورة</MenuItem>
                     </Select>
                   </FormControl>
                 </Box>
@@ -1598,21 +1648,21 @@ const Subscriptions = () => {
                 </Box>
               ) : (
                 <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflowX: 'auto' }}>
-                  <Table size="small" sx={{ minWidth: 1800 }}>
+                  <Table size="small" sx={{ width: '100%' }}>
                     <TableHead>
                       <TableRow sx={{ bgcolor: 'grey.50' }}>
-                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>الشركة</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>كود الاشتراك</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>الباقة</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap', textAlign: 'center' }}>الاستخدام</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>السعر (ر.س)</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>الضريبة (ر.س)</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>الإجمالي (ر.س)</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>نوع الدفع</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>الحالة</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>رقم حوالة الدفع</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>البداية / النهاية</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>إجراءات</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', }}>الشركة</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', }}>كود الاشتراك</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', }}>الباقة</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', textAlign: 'center' }}>الاستخدام</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', }}>السعر (ر.س)</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', }}>الضريبة (ر.س)</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', }}>الإجمالي (ر.س)</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', }}>نوع الدفع</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', }}>الحالة</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', }}>رقم حوالة الدفع</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', }}>البداية / النهاية</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.9rem', }}>إجراءات</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1640,7 +1690,7 @@ const Subscriptions = () => {
 
                           return (
                             <TableRow key={index} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
-                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                              <TableCell sx={{ fontSize: '0.85rem' }}>
                                 <Typography variant="body2" fontWeight="bold">
                                   {companyNameText}
                                 </Typography>
@@ -1648,15 +1698,15 @@ const Subscriptions = () => {
                                   {companyCityText ? `مدينة: ${companyCityText}` : `رمز ${row.company_id}`}
                                 </Typography>
                               </TableCell>
-                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                              <TableCell sx={{ fontSize: '0.85rem' }}>
                                 <Typography variant="body2" fontWeight="bold" color="primary">
                                   {row.code_subscription || '—'}
                                 </Typography>
                               </TableCell>
-                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                              <TableCell sx={{ fontSize: '0.85rem' }}>
                                 <Chip size="small" color="secondary" label={row.name_package || '—'} />
                               </TableCell>
-                              <TableCell align="center" sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                              <TableCell align="center" sx={{ fontSize: '0.85rem' }}>
                                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                   <Typography variant="body2">
                                     {row.project_count_used || '0'} / {row.project_count || '0'}
@@ -1666,22 +1716,22 @@ const Subscriptions = () => {
                                   </Typography>
                                 </Box>
                               </TableCell>
-                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                              <TableCell sx={{ fontSize: '0.85rem' }}>
                                 <Typography variant="body2" fontWeight="bold">
                                   {parseFloat(row.price || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </Typography>
                               </TableCell>
-                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                              <TableCell sx={{ fontSize: '0.85rem' }}>
                                 <Typography variant="body2">
                                   {parseFloat(row.vat || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </Typography>
                               </TableCell>
-                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                              <TableCell sx={{ fontSize: '0.85rem' }}>
                                 <Typography variant="body2" fontWeight="bold" color="primary">
                                   {(parseFloat(row.price || 0) + parseFloat(row.vat || 0)).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </Typography>
                               </TableCell>
-                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                              <TableCell sx={{ fontSize: '0.85rem' }}>
                                 <Chip
                                   label={row.type === 'paid' ? 'مدفوع' : row.type === 'free' ? 'مجاني' : row.type || '—'}
                                   color={row.type === 'paid' ? 'primary' : row.type === 'free' ? 'default' : 'default'}
@@ -1689,18 +1739,23 @@ const Subscriptions = () => {
                                   variant="outlined"
                                 />
                               </TableCell>
-                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
-                                <Chip
-                                  label={row.status === 'active' ? 'نشط' : row.status === 'inactive' ? 'غير نشط' : row.status || '—'}
-                                  color={row.status === 'active' ? 'success' : 'default'}
-                                  size="small"
-                                  variant="outlined"
-                                />
+                              <TableCell sx={{ fontSize: '0.85rem' }}>
+                                {(() => {
+                                  const isRowEffectivelyActive = row.status === 'active';
+                                  return (
+                                    <Chip
+                                      label={isRowEffectivelyActive ? 'نشط' : 'غير نشط'}
+                                      color={isRowEffectivelyActive ? 'success' : 'default'}
+                                      size="small"
+                                      variant="outlined"
+                                    />
+                                  );
+                                })()}
                               </TableCell>
-                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                              <TableCell sx={{ fontSize: '0.85rem' }}>
                                 {row.tran_ref || '—'}
                               </TableCell>
-                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                              <TableCell sx={{ fontSize: '0.85rem' }}>
                                 <Typography variant="body2">
                                   من: {row.start_date ? new Date(row.start_date).toLocaleDateString() : '—'}
                                 </Typography>
@@ -1708,13 +1763,13 @@ const Subscriptions = () => {
                                   إلى: {row.end_date ? new Date(row.end_date).toLocaleDateString() : '—'}
                                 </Typography>
                               </TableCell>
-                              <TableCell sx={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
-                                <Tooltip title={row.partner_id ? 'فتح الفاتورة في Odoo' : 'لا توجد فاتورة مرتبطة بهذا الاشتراك'}>
+                              <TableCell sx={{ fontSize: '0.85rem' }}>
+                                <Tooltip title={(row.partner_id && row.status === 'active') ? 'فتح الفاتورة في Odoo' : 'لا توجد فاتورة مدفوعة مرتبطة بهذا الاشتراك'}>
                                   <span>
                                     <IconButton
                                       size="small"
-                                      color={row.partner_id ? 'primary' : 'default'}
-                                      disabled={!row.partner_id}
+                                      color={(row.partner_id && row.status === 'active') ? 'primary' : 'default'}
+                                      disabled={!(row.partner_id && row.status === 'active')}
                                       onClick={async () => {
                                         // استدعاء الباك إند للحصول على الرابط الكامل مع access_token
                                         setNotification({ open: true, message: 'جاري جلب رابط الفاتورة...', severity: 'info' });
@@ -1747,12 +1802,12 @@ const Subscriptions = () => {
             </Box>
           )}
 
-          {/* التبويب الرابع: أنواع الاشتراكات (التسعيرات) */}
+          {/* التبويب الرابع: أنواع الباقات (التسعيرات) */}
           {activeTab === 3 && (
             <>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  أنواع الاشتراكات ({subscriptionTypes?.length || 0})
+                  أنواع الباقات ({subscriptionTypes?.length || 0})
                 </Typography>
                 <Button
                   variant="contained"
@@ -1772,10 +1827,10 @@ const Subscriptions = () => {
                 <Box sx={{ textAlign: 'center', py: 6 }}>
                   <PaymentIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
                   <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 2 }}>
-                    لا توجد أنواع اشتراكات
+                    لا توجد أنواع باقات
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                    ابدأ بإضافة أنواع الاشتراكات والتسعيرات
+                    ابدأ بإضافة أنواع الباقات والتسعيرات
                   </Typography>
                   <Button variant="outlined" startIcon={<AddIcon />} onClick={openAddTypeDialog}>
                     إضافة نوع جديد
@@ -1857,12 +1912,12 @@ const Subscriptions = () => {
             </>
           )}
 
-          {/* التبويب الخامس: إضافة اشتراك لشركة */}
+          {/* التبويب الخامس: إضافة باقة لشركة */}
           {activeTab === 4 && (
             <>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  إضافة اشتراك جديد لشركة
+                  إضافة باقة جديدة لشركة
                 </Typography>
               </Box>
 

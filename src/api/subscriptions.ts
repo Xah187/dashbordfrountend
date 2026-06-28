@@ -114,8 +114,7 @@ export const fetchSubscriptionStats = async (): Promise<{ success: boolean; data
         fetchMore = false;
       }
 
-      // حماية قصوى: لا نجلب أكثر من 500 اشتراك في الإحصائيات
-      if (allSubs.length >= 500) fetchMore = false;
+      // تم إزالة الحماية القصوى بناءً على طلب المستخدم لجلب كل الاشتراكات بلا حدود
     }
 
     // حساب الإحصائيات الحقيقية من البيانات
@@ -126,29 +125,39 @@ export const fetchSubscriptionStats = async (): Promise<{ success: boolean; data
     let inactiveCount = 0;
     let expiringSoonCount = 0;
     let totalRevenue = 0;
+    let paidCount = 0;
 
     allSubs.forEach((sub: any) => {
-      // الباقة الحقيقية التي تم دفعها يجب أن تحتوي على رقم حوالة (tran_ref)
-      const hasTranRef = sub.tran_ref && String(sub.tran_ref).trim() !== '' && String(sub.tran_ref) !== '0' && String(sub.tran_ref).toLowerCase() !== 'null';
+      const hasTranRef = sub.tran_ref &&
+        String(sub.tran_ref).trim() !== '' &&
+        String(sub.tran_ref) !== '0' &&
+        String(sub.tran_ref).toLowerCase() !== 'null';
 
-      // فقط إضافة الباقات المدفوعة فعلياً والتي لها حوالة مالية
-      if (sub.type === 'paid' && hasTranRef) {
+      const isEffectivelyActive = sub.status === 'active';
+      const endDateObj = sub.end_date ? new Date(sub.end_date) : null;
+      
+      const isExpired = sub.status === 'inactive' && endDateObj && endDateObj < now;
+
+      // حساب الإيرادات من الباقات المدفوعة (النشطة أو المنتهية)
+      const isActuallyPaid = sub.status === 'active' || (isExpired && hasTranRef);
+
+      if (sub.type === 'paid' && isActuallyPaid) {
         const price = parseFloat(sub.price) || 0;
         const vat = parseFloat(sub.vat) || 0;
         totalRevenue += price + vat;
+        paidCount++;
       }
 
-      if (sub.status === 'active') {
+      if (isEffectivelyActive) {
         activeCount++;
         // تحقق من الاشتراكات التي تنتهي خلال 30 يوم
-        if (sub.end_date) {
-          const endDate = new Date(sub.end_date);
-          if (endDate <= thirtyDaysLater && endDate >= now) {
+        if (endDateObj) {
+          if (endDateObj <= thirtyDaysLater && endDateObj >= now) {
             expiringSoonCount++;
           }
         }
-      } else {
-        inactiveCount++;
+      } else if (isExpired) {
+        inactiveCount++; // فقط نحسب المنتهية فعلياً وليس الـ Abandoned
       }
     });
 
@@ -167,7 +176,7 @@ export const fetchSubscriptionStats = async (): Promise<{ success: boolean; data
         expiredSubscriptions: inactiveCount,
         expiringSoon: expiringSoonCount,
         totalRevenue,
-        averageCost: allSubs.length > 0 ? totalRevenue / allSubs.length : 0
+        averageCost: paidCount > 0 ? totalRevenue / paidCount : 0
       }
     };
   } catch (error) {

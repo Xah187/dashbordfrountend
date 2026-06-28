@@ -47,7 +47,7 @@ import {
   Engineering as EngineeringIcon,
   Description as DescriptionIcon,
   ArrowBack as ArrowBackIcon,
-  } from "@mui/icons-material";
+} from "@mui/icons-material";
 import { ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from "@mui/icons-material";
 import { companiesSubscribedApi, Company, Branch, Project } from "../api";
 import { getSoftStatusChipSx } from "../../../utils/colorUtils";
@@ -77,13 +77,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [showDisabledProjects, setShowDisabledProjects] = useState(false); // افتراضياً نعرض المشاريع النشطة فقط
   const [totalPages, setTotalPages] = useState(1);
-  const [pageLastIds, setPageLastIds] = useState<{[key: number]: number}>({1: 0}); // تتبع last_id لكل صفحة
+  const [pageLastIds, setPageLastIds] = useState<{ [key: number]: number }>({ 1: 0 }); // تتبع last_id لكل صفحة
   const [hasNextPage, setHasNextPage] = useState(false); // تتبع وجود صفحة تالية
   const [totalProjectsLoaded, setTotalProjectsLoaded] = useState(0); // عدد المشاريع المحملة
   const [localLoading, setLocalLoading] = useState(false);
   // مرساة للتمرير السلس إلى أعلى القائمة بعد تغيير الصفحة
   const listTopRef = React.useRef<HTMLDivElement | null>(null);
-  
+
   // State النوافذ المنبثقة
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -121,7 +121,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
       // إعادة تعيين البيانات إذا طُلب ذلك
       if (resetPagination) {
-        setPageLastIds({1: 0});
+        setPageLastIds({ 1: 0 });
         setCurrentPage(1);
         setTotalPages(1);
         setHasNextPage(false);
@@ -132,7 +132,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       // الحصول على last_id للصفحة المطلوبة
       const lastIdForPage = pageLastIds[page] || 0;
 
-        
+
 
       const response = await companiesSubscribedApi.getBranchProjects(
         branch.companyId,
@@ -144,9 +144,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
       if (response.success) {
         const newProjects = response.data || [];
-        
 
-        
+
+
         // استبدال المشاريع بمشاريع الصفحة الجديدة
         setProjects(newProjects);
         setCurrentPage(page);
@@ -160,13 +160,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         // تحديث معلومات الترقيم (نظام ديناميكي مفتوح)
         if (newProjects.length > 0) {
           const lastProjectId = newProjects[newProjects.length - 1].id;
-          
+
           // حفظ last_id للصفحة التالية إذا حصلنا على العدد الكامل (10)
           if (newProjects.length === 10) {
-          setPageLastIds(prev => ({
-            ...prev,
-            [page + 1]: lastProjectId
-          }));
+            setPageLastIds(prev => ({
+              ...prev,
+              [page + 1]: lastProjectId
+            }));
             setHasNextPage(true);
             // توسيع إجمالي الصفحات بشكل ديناميكي لدعم عدد غير محدود من المشاريع
             setTotalPages(Math.max(totalPages, page + 1)); // إضافة صفحة واحدة إضافية
@@ -194,7 +194,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             }
           }
         }
-        
+
 
       } else {
         throw new Error(response.error || "حدث خطأ أثناء تحميل المشاريع");
@@ -202,7 +202,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     } catch (error: any) {
       console.error("خطأ في تحميل المشاريع:", error);
       onError(error.message || "حدث خطأ أثناء تحميل المشاريع");
-      
+
       // في حالة الخطأ، إذا لم نكن في الصفحة الأولى، ارجع للصفحة السابقة
       if (page > 1) {
         setCurrentPage(page - 1);
@@ -219,42 +219,42 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   // التنقل بين الصفحات المحسن للصفحات المتقدمة
   const handlePageChange = (event: React.ChangeEvent<unknown>, page: number) => {
     if (!localLoading && page !== currentPage && page >= 1) {
-              console.log('تغيير الصفحة:', {
+      console.log('تغيير الصفحة:', {
         fromPage: currentPage,
         toPage: page,
         availablePageLastIds: Object.keys(pageLastIds),
         targetPageLastId: pageLastIds[page]
       });
-      
+
       // للصفحة الأولى أو الصفحات المحفوظة في pageLastIds
       if (page === 1 || pageLastIds[page] !== undefined) {
-      loadProjects(page);
+        loadProjects(page);
       } else {
         // للصفحات المتقدمة، احسب last_id بناءً على الصفحات السابقة
         console.log('🔢 حساب last_id للصفحة المتقدمة:', page);
-        
+
         // ابحث عن أقرب صفحة محفوظة
         let nearestPage = 1;
         let nearestLastId = 0;
-        
+
         for (let i = 1; i < page; i++) {
           if (pageLastIds[i] !== undefined) {
             nearestPage = i;
             nearestLastId = pageLastIds[i];
           }
         }
-        
+
 
 
         // احسب last_id تقريبي (كل صفحة = 10 مشاريع)
         const calculatedLastId = nearestLastId + ((page - nearestPage) * 10);
-        
+
         // احفظ القيمة المحسوبة وحمّل الصفحة
         setPageLastIds(prev => ({
           ...prev,
           [page]: calculatedLastId
         }));
-        
+
         loadProjects(page);
       }
     }
@@ -275,7 +275,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     if (!localLoading && listTopRef.current) {
       try {
         listTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      } catch {}
+      } catch { }
     }
   }, [currentPage, localLoading]);
 
@@ -388,7 +388,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           "success"
         );
         setDialogOpen(false);
-        
+
         // إعادة تحميل البيانات من البداية للحصول على أحدث البيانات
         loadProjects(1, true);
       } else {
@@ -414,7 +414,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
       if (response.success) {
         showMessage("تم حذف المشروع بنجاح", "success");
-        
+
         // إعادة تحميل الصفحة الحالية أو الصفحة السابقة إذا كانت الحالية فارغة
         const remainingProjects = projects.filter(p => p.id !== project.id);
         if (remainingProjects.length === 0 && currentPage > 1) {
@@ -460,7 +460,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   useEffect(() => {
     if (branch.id) {
       setCurrentPage(1);
-      setPageLastIds({1: 0});
+      setPageLastIds({ 1: 0 });
       loadProjects(1, true);
     }
   }, [showDisabledProjects]);
@@ -526,7 +526,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         {project.Note && (
           <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 2 }}>
             <DescriptionIcon sx={{ fontSize: 16, mr: 1, mt: 0.5, color: 'text.secondary' }} />
-            <Typography variant="body2" color="text.secondary" sx={{ 
+            <Typography variant="body2" color="text.secondary" sx={{
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               display: '-webkit-box',
@@ -539,20 +539,20 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         )}
 
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Chip 
+          <Chip
             label={getProjectStatusText(project.Disabled)}
             color={getProjectStatusColor(project.Disabled)}
             size="small"
           />
           {project.Referencenumber > 0 && (
-            <Chip 
+            <Chip
               label={`مرجع: ${project.Referencenumber}`}
               variant="outlined"
               size="small"
             />
           )}
           {project.numberBuilding > 0 && (
-            <Chip 
+            <Chip
               label={`مبنى: ${project.numberBuilding}`}
               variant="outlined"
               size="small"
@@ -570,17 +570,17 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         >
           عرض التفاصيل
         </Button>
-        
+
         <Box>
-          <IconButton 
-            size="small" 
+          <IconButton
+            size="small"
             onClick={() => openProjectDialog(project)}
             title="تعديل"
           >
             <EditIcon fontSize="small" />
           </IconButton>
-          <IconButton 
-            size="small" 
+          <IconButton
+            size="small"
             onClick={() => handleDeleteProject(project)}
             title="حذف"
             color="error"
@@ -604,7 +604,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             variant="contained"
             startIcon={<ArrowBackIcon />}
             onClick={onBack}
-            sx={{ 
+            sx={{
               backgroundColor: 'rgba(255, 255, 255, 0.15)',
               color: 'white',
               border: '1px solid rgba(255, 255, 255, 0.25)',
@@ -655,7 +655,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             }}
             sx={{ flex: 1, minWidth: 300 }}
           />
-          
+
           <FormControlLabel
             control={
               <Switch
@@ -667,7 +667,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
             label="إظهار المشاريع المتوقفة أيضاً"
             sx={{ whiteSpace: 'nowrap' }}
           />
-          
+
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -851,14 +851,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     )}
                   </TableCell>
                   <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
-                    {project.ProjectStartdate 
+                    {project.ProjectStartdate
                       ? new Date(project.ProjectStartdate).toLocaleDateString('en-GB')
                       : 'غير محدد'
                     }
                   </TableCell>
                   <TableCell align="center" sx={{ display: { xs: 'none', md: 'table-cell' } }}>
-                    {(project as any).cost 
-                      ? `${((project as any).cost).toLocaleString('en-US', {maximumFractionDigits: 2, minimumFractionDigits: 2})} ريال`
+                    {(project as any).cost
+                      ? `${((project as any).cost).toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 })} ريال`
                       : 'غير محدد'
                     }
                   </TableCell>
@@ -897,15 +897,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           <EditIcon />
                         </IconButton>
                       </Tooltip>
-                                             <Tooltip title="حذف">
-                         <IconButton
-                           size="small"
-                           color="error"
-                           onClick={() => handleDeleteProject(project)}
-                         >
-                           <DeleteIcon />
-                         </IconButton>
-                       </Tooltip>
+                      <Tooltip title="حذف">
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleDeleteProject(project)}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
                     </Box>
                   </TableCell>
                 </TableRow>
@@ -916,8 +916,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                   <Box sx={{ p: 4, textAlign: 'center' }}>
                     <ProjectIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
                     <Typography variant="h6" color="text.secondary">
-                      {searchTerm ? 
-                        `لم يتم العثور على نتائج للبحث "${searchTerm}" في الصفحة الحالية` : 
+                      {searchTerm ?
+                        `لم يتم العثور على نتائج للبحث "${searchTerm}" في الصفحة الحالية` :
                         "لا توجد مشاريع في هذه الصفحة"
                       }
                     </Typography>
@@ -930,14 +930,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 2 }}>
                           جرب الانتقال لصفحات أخرى أو إضافة مشاريع جديدة.
                         </Typography>
-                      <Button
-                        variant="outlined"
-                        startIcon={<AddIcon />}
-                        onClick={() => openProjectDialog()}
+                        <Button
+                          variant="outlined"
+                          startIcon={<AddIcon />}
+                          onClick={() => openProjectDialog()}
                           sx={{ mt: 1 }}
-                      >
+                        >
                           إضافة مشروع جديد
-                      </Button>
+                        </Button>
                       </>
                     )}
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
@@ -954,14 +954,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       {/* تحذير البحث المحلي */}
       {searchTerm.trim() && filteredProjects.length === 0 && projects.length > 0 && (
         <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
-                      لا توجد نتائج للبحث "{searchTerm}" في الصفحة الحالية ({projects.length} مشروع). 
+          لا توجد نتائج للبحث "{searchTerm}" في الصفحة الحالية ({projects.length} مشروع).
           جرب تصفح الصفحات الأخرى أو امسح البحث لعرض جميع المشاريع.
         </Alert>
       )}
 
       {searchTerm.trim() && filteredProjects.length > 0 && (
         <Alert severity="success" sx={{ mt: 2, mb: 2 }}>
-                      عُثر على {filteredProjects.length} مشروع من أصل {projects.length} في الصفحة الحالية.
+          عُثر على {filteredProjects.length} مشروع من أصل {projects.length} في الصفحة الحالية.
         </Alert>
       )}
 
@@ -970,8 +970,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
 
       {/* نافذة إضافة/تعديل مشروع */}
-      <Dialog 
-        open={dialogOpen} 
+      <Dialog
+        open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         maxWidth="md"
         fullWidth
@@ -1065,8 +1065,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>إلغاء</Button>
-          <Button 
-            onClick={handleSaveProject} 
+          <Button
+            onClick={handleSaveProject}
             variant="contained"
             disabled={!formData.Nameproject.trim() || !formData.TypeOFContract}
           >

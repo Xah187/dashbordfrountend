@@ -1037,10 +1037,9 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
             <TableRow>
               <TableCell>الشركة</TableCell>
               <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>العنوان والموقع</TableCell>
-              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>تفاصيل الاشتراك (ميلادي)</TableCell>
+              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>تاريخ التسجيل</TableCell>
               <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>الفروع</TableCell>
               <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>المشاريع</TableCell>
-              <TableCell>الحالة</TableCell>
               <TableCell>الإجراءات</TableCell>
             </TableRow>
           </TableHead>
@@ -1063,9 +1062,6 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
                   </TableCell>
                   <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
                     <Skeleton variant="text" width="30%" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton variant="rectangular" width={60} height={24} />
                   </TableCell>
                   <TableCell>
                     <Skeleton variant="text" width="80%" />
@@ -1101,10 +1097,7 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
                   </TableCell>
                   <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                     <Typography variant="body2">
-                      من: {new Date(company.subscriptionStart).toLocaleDateString('en-GB')}
-                    </Typography>
-                    <Typography variant="body2">
-                      إلى: {new Date(company.subscriptionEnd).toLocaleDateString('en-GB')}
+                      {new Date(company.subscriptionStart).toLocaleDateString('en-GB')}
                     </Typography>
                   </TableCell>
                   <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
@@ -1124,13 +1117,6 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
                         )}
                       </Typography>
                     </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={company.isActive ? 'نشط' : 'غير نشط'}
-                      size="small"
-                      sx={getSoftStatusChipSx(!!company.isActive)}
-                    />
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
