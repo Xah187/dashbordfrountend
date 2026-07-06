@@ -49,6 +49,7 @@ import Brightness7Icon from '@mui/icons-material/Brightness7';
 import BusinessIcon from '@mui/icons-material/Business';
 import CardMembershipIcon from '@mui/icons-material/CardMembership';
 import ExtensionIcon from '@mui/icons-material/Extension';
+import SystemUpdateIcon from '@mui/icons-material/SystemUpdate';
 
 import { useTheme } from '../../contexts/ThemeContext';
 import SearchIcon from '@mui/icons-material/Search';
@@ -110,6 +111,7 @@ const menuItems = [
   { text: 'الميزات المتقدمة', icon: <ExtensionIcon color="secondary" />, path: '/advanced-features' },
   { text: 'الاشتراكات', icon: <CardMembershipIcon />, path: '/subscriptions' },
   { text: 'أنشطة تسجيل الدخول', icon: <AssignmentIcon />, path: '/login-activity' },
+  { text: 'تحديث التطبيق', icon: <SystemUpdateIcon color="primary" />, path: '/app-version' },
   { text: 'الإعدادات', icon: <SettingsIcon />, path: '/settings' },
 ];
 

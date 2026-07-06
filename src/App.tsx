@@ -30,6 +30,7 @@ const AdvancedFeatures = lazy(() => import('./pages/AdvancedFeatures'));
 const ProjectDetails = lazy(() => import('./pages/ProjectDetails'));
 const LoginActivity = lazy(() => import('./pages/LoginActivity'));
 const CompaniesSubscribed = lazy(() => import('./pages/CompaniesSubscribed'));
+const AppVersionUpdate = lazy(() => import('./pages/AppVersionUpdate'));
 
 // مكون Loading
 const LoadingScreen = () => (
@@ -749,6 +750,7 @@ function App() {
 
                     <Route path="users" element={<Suspense fallback={<LoadingScreen />}><Users /></Suspense>} />
                     <Route path="settings" element={<Suspense fallback={<LoadingScreen />}><Settings /></Suspense>} />
+                    <Route path="app-version" element={<Suspense fallback={<LoadingScreen />}><AppVersionUpdate /></Suspense>} />
                     <Route path="subscriptions" element={<Suspense fallback={<LoadingScreen />}><Subscriptions /></Suspense>} />
                     <Route path="login-activity" element={<Suspense fallback={<LoadingScreen />}><LoginActivity /></Suspense>} />
                     <Route path="advanced-analytics" element={<Suspense fallback={<LoadingScreen />}><AdvancedAnalytics /></Suspense>} />
