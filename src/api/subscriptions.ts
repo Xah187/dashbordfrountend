@@ -350,7 +350,6 @@ export const getSubscriptionStatusColor = (status: string): 'success' | 'error' 
   switch (status) {
     case 'active': return 'success';
     case 'expired': return 'error';
-    case 'expiring': return 'warning';
     default: return 'default';
   }
 };
@@ -360,7 +359,6 @@ export const getSubscriptionStatusText = (status: string): string => {
   switch (status) {
     case 'active': return 'نشط';
     case 'expired': return 'منتهي';
-    case 'expiring': return 'ينتهي قريباً';
     default: return 'غير محدد';
   }
 };

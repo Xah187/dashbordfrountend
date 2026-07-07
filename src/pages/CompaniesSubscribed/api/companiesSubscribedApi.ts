@@ -274,32 +274,41 @@ export const companiesSubscribedApi = {
     }
   },
 
-  // تحديث شركة
+  // تحديث شركة - متوافق مع UpdateDataCompany في الباكاند
   async updateCompany(id: number, companyData: {
-    name?: string;
-    address?: string;
-    city?: string;
-    country?: string;
-    registrationNumber?: string;
-    buildingNumber?: string;
-    streetName?: string;
-    neighborhoodName?: string;
-    postalCode?: string;
-    taxNumber?: string;
-    branchesAllowed?: number;
-    subscriptionStartDate?: string;
-    subscriptionEndDate?: string;
-    cost?: number;
+    NameCompany?: string;
+    BuildingNumber?: string;
+    StreetName?: string;
+    NeighborhoodName?: string;
+    PostalCode?: string;
+    City?: string;
+    Country?: string;
+    TaxNumber?: string;
+    CommercialRegistrationNumber?: string;
+    Cost?: number;
   }): Promise<ApiResponse<Company>> {
     try {
-      const response = await apiClient.put(`/companies/${id}`, companyData);
-      return response.data;
-    } catch (error: any) {
-      console.error("خطأ في تحديث الشركة:", error);
+      // الباكاند يتوقع PUT /company مع id في body
+      const payload = { id, ...companyData };
+      const response = await apiClient.put('/company', payload);
+      // الباكاند يرجع { success: 'تمت العملية بنجاح', message: '...' }
+      const resData = response.data;
+      const isSuccess =
+        resData?.success === true ||
+        resData?.success === 'تمت العملية بنجاح' ||
+        (typeof resData?.success === 'string' && resData.success.includes('نجاح'));
+      if (isSuccess) {
+        return { success: true, data: resData?.data };
+      }
       return {
         success: false,
-        error: error.response?.data?.error || error.message || "حدث خطأ أثناء تحديث الشركة",
+        error: resData?.message || resData?.errors ? JSON.stringify(resData.errors) : 'حدث خطأ أثناء تحديث الشركة',
       };
+    } catch (error: any) {
+      console.error("خطأ في تحديث الشركة:", error);
+      const errData = error.response?.data;
+      const errMsg = errData?.message || errData?.error || error.message || "حدث خطأ أثناء تحديث الشركة";
+      return { success: false, error: errMsg };
     }
   },
 
@@ -597,18 +606,72 @@ export const companiesSubscribedApi = {
     }
   },
 
-  // حذف مشروع
-  async deleteProject(projectId: number): Promise<ApiResponse> {
+  // حذف مشروع - يُرسل جميع المعرّفات التي قد يحتاجها الباك إند للتحقق والحذف
+  async deleteProject(
+    projectId: number, 
+    branchId?: number, 
+    companyId?: number
+  ): Promise<ApiResponse> {
     try {
-      const response = await apiClient.get("/brinshCompany/DeletProjectwithDependencies", {
-        params: { ProjectID: projectId }
-      });
-      return response.data;
+      // إرسال جميع المعرّفات المحتملة لأن الباك إند قد يحتاج أي منها للتحقق
+      const params: Record<string, any> = { 
+        idProject: projectId,   // ✅ الاسم الصحيح كما يستخدمه تطبيق React Native
+        ProjectID: projectId,   // احتياطي
+        _t: new Date().getTime() // منع الكاش
+      };
+
+      // إضافة معرّف الفرع إذا كان متوفراً (ضروري للتحقق في الباك إند)
+      if (branchId) {
+        params.IDCompanySub = branchId;
+        params.IDcompanySub = branchId; // كلا الصيغتين
+      }
+      
+      // إضافة معرّف الشركة إذا كان متوفراً
+      if (companyId) {
+        params.IDCompany = companyId;
+      }
+
+      console.log('🗑️ [API] إرسال طلب حذف المشروع بالمعرّفات:', params);
+
+      const response = await apiClient.get("/brinshCompany/DeletProjectwithDependencies", { params });
+
+      const rawData = response.data;
+      console.log('🔍 [DELETE PROJECT] استجابة الباك إند الخام:', JSON.stringify(rawData, null, 2));
+      console.log('🔍 [DELETE PROJECT] HTTP Status:', response.status);
+
+      // التحقق من جميع أشكال الاستجابة الممكنة
+      const isSuccess = 
+        rawData?.success === true ||
+        rawData?.success === 'true' ||
+        (typeof rawData?.success === 'string' && rawData.success.length > 0) || // success كنص (مثل "تمت عملية الحذف بنجاح")
+        rawData?.status === 'success' ||
+        rawData?.message?.includes('حذف') ||
+        rawData?.massege?.includes('حذف') ||
+        rawData?.masseg?.includes('حذف') ||
+        (response.status >= 200 && response.status < 300 && rawData?.success !== false);
+
+      console.log('✅ [DELETE PROJECT] هل تم الحذف؟', isSuccess, '| success value:', rawData?.success);
+
+      if (isSuccess) {
+        return { 
+          success: true, 
+          message: typeof rawData?.success === 'string' 
+            ? rawData.success 
+            : (rawData?.message || 'تم الحذف بنجاح') 
+        };
+      } else {
+        console.error('❌ [DELETE PROJECT] فشل الحذف - الاستجابة:', rawData);
+        return { success: false, error: rawData?.error || rawData?.message || 'فشل الحذف' };
+      }
     } catch (error: any) {
-      console.error("خطأ في حذف المشروع:", error);
+      console.error("❌ [DELETE PROJECT] خطأ:", {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
       return {
         success: false,
-        error: error.response?.data?.error || error.message || "حدث خطأ أثناء حذف المشروع",
+        error: error.response?.data?.error || error.response?.data?.message || error.message || "حدث خطأ أثناء حذف المشروع",
       };
     }
   },

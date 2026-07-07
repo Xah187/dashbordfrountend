@@ -516,7 +516,6 @@ const AdvancedFeatures: React.FC = () => {
     const labelMap: Record<string, string> = {
       'active': 'نشط',
       'expired': 'منتهي',
-      'expiring': 'ينتهي قريباً',
       'approved': 'موافق عليه',
       'rejected': 'مرفوض',
       'pending': 'معلق',

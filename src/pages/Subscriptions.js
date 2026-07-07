@@ -250,12 +250,10 @@ const Subscriptions = () => {
           if (endDateObj) {
             const diffTime = endDateObj.getTime() - now.getTime();
             const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            if (daysRemaining > 0 && daysRemaining <= 30) {
-              finalStatus = 'expiring';
-            } else if (daysRemaining <= 0) {
-              finalStatus = 'expired';
-            } else {
+            if (daysRemaining > 0) {
               finalStatus = 'active';
+            } else {
+              finalStatus = 'expired';
             }
           } else {
             finalStatus = 'active';
@@ -846,7 +844,6 @@ const Subscriptions = () => {
     switch (status) {
       case 'active': return 'success';
       case 'expired': return 'error';
-      case 'expiring': return 'warning';
       default: return 'default';
     }
   };
@@ -856,7 +853,6 @@ const Subscriptions = () => {
     switch (status) {
       case 'active': return 'نشط';
       case 'expired': return 'منتهي';
-      case 'expiring': return 'ينتهي قريباً';
       default: return 'غير محدد';
     }
   };
@@ -866,7 +862,6 @@ const Subscriptions = () => {
     switch (status) {
       case 'active': return <CheckCircleIcon />;
       case 'expired': return <ErrorIcon />;
-      case 'expiring': return <WarningIcon />;
       default: return <ScheduleIcon />;
     }
   };
@@ -955,24 +950,6 @@ const Subscriptions = () => {
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between">
               <Box>
-                <Typography variant="h6" color="warning.main">
-                  {stats.expiringSoon || 0}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  تنتهي قريباً
-                </Typography>
-              </Box>
-              <WarningIcon color="warning" />
-            </Box>
-          </CardContent>
-        </Card>
-      </Grid>
-
-      <Grid item xs={12} sm={6} md={2}>
-        <Card>
-          <CardContent>
-            <Box display="flex" alignItems="center" justifyContent="space-between">
-              <Box>
                 <Typography variant="h6" color="info.main">
                   {(stats.totalRevenue || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س
                 </Typography>
@@ -1037,7 +1014,6 @@ const Subscriptions = () => {
               >
                 <MenuItem value="">الكل</MenuItem>
                 <MenuItem value="active">نشط</MenuItem>
-                <MenuItem value="expiring">ينتهي قريباً</MenuItem>
                 <MenuItem value="expired">منتهي</MenuItem>
               </Select>
             </FormControl>

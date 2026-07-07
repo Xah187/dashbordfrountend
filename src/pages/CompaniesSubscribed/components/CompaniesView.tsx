@@ -58,6 +58,7 @@ import { companiesSubscribedApi, Company } from "../api";
 import type { CompanyFullReport } from "../api";
 import apiClient from "../../../api/config";
 import { getSoftStatusChipSx } from "../../../utils/colorUtils";
+import { countries, provinces } from "../../../utils/locations";
 
 interface CompaniesViewProps {
   onCompanySelect: (company: Company) => void;
@@ -156,7 +157,6 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
       branchesAllowed: "",
       subscriptionStartDate: "",
       subscriptionEndDate: "",
-      cost: "",
     });
   };
   const [formData, setFormData] = useState({
@@ -172,7 +172,6 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
     branchesAllowed: "",
     subscriptionStartDate: "",
     subscriptionEndDate: "",
-    cost: "",
   });
 
   // قائمة المدن المتاحة (من البيانات الموجودة)
@@ -524,14 +523,13 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
         streetName: "",
         neighborhoodName: "",
         postalCode: "",
-        city: company.city || "",
-        country: company.country || "",
+        city: (company.city || "").trim(),
+        country: (company.country || "").trim(),
         commercialRegistrationNumber: (company as any).commercialRegistrationNumber || company.registrationNumber || "",
         taxNumber: "",
         branchesAllowed: company.branchesAllowed?.toString() || "",
         subscriptionStartDate: company.subscriptionStart || "",
         subscriptionEndDate: company.subscriptionEnd || "",
-        cost: "",
       });
     } else {
       console.log('➕ فتح نموذج إضافة شركة جديدة');
@@ -549,7 +547,6 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
         branchesAllowed: "",
         subscriptionStartDate: "",
         subscriptionEndDate: "",
-        cost: "",
       });
     }
     setDialogOpen(true);
@@ -570,14 +567,13 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
         const streetName = String(details.StreetName || details.streetName || "");
         const neighborhoodName = String(details.NeighborhoodName || details.neighborhoodName || "");
         const postalCode = String(details.PostalCode || details.postalCode || "");
-        const city = String(details.City || details.city || "");
-        const country = String(details.Country || details.country || "");
+        const city = String(details.City || details.city || "").trim();
+        const country = String(details.Country || details.country || "").trim();
         const registrationNumber = String(details.CommercialRegistrationNumber || details.registrationNumber || "");
         const taxNumber = String(details.TaxNumber || details.taxNumber || "");
         const branchesAllowed = String(details.NumberOFbranchesAllowed || details.branchesAllowed || "");
         const subscriptionStartDate = String(details.SubscriptionStartDate || details.subscriptionStartDate || "");
         const subscriptionEndDate = String(details.SubscriptionEndDate || details.subscriptionEndDate || "");
-        const cost = String(details.Cost || details.cost || "");
 
         // دمج القيم في النموذج دون فقد ما تم تعبئته مسبقاً
         setFormData(prev => ({
@@ -594,7 +590,6 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
           branchesAllowed: prev.branchesAllowed || branchesAllowed,
           subscriptionStartDate: prev.subscriptionStartDate || subscriptionStartDate,
           subscriptionEndDate: prev.subscriptionEndDate || subscriptionEndDate,
-          cost: prev.cost || cost,
         }));
       } catch (e: any) {
         console.error('فشل جلب تفاصيل الشركة:', e);
@@ -612,16 +607,6 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
       // التحقق من صحة البيانات المطلوبة
       if (!(formData.name || "").trim()) {
         onError("اسم الشركة مطلوب");
-        return;
-      }
-      
-      if (!formData.commercialRegistrationNumber || formData.commercialRegistrationNumber.toString().trim() === "") {
-        onError("رقم التسجيل التجاري مطلوب");
-        return;
-      }
-      
-      if (!formData.taxNumber || formData.taxNumber.toString().trim() === "") {
-        onError("الرقم الضريبي مطلوب");
         return;
       }
       
@@ -654,88 +639,133 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
         onError("الدولة مطلوبة");
         return;
       }
-      
-      if (!formData.branchesAllowed || formData.branchesAllowed.toString().trim() === "") {
-        onError("عدد الفروع المسموحة مطلوب");
-        return;
-      }
-
-      console.log('💾 بدء عملية حفظ الشركة:', {
-        isEditing: !!editingCompany,
-        companyId: editingCompany?.id,
-        formData: formData
-      });
-
-      // فحص صحة البيانات قبل المعالجة
-              console.log('فحص أنواع البيانات:', {
-        nameType: typeof formData.name,
-        buildingNumberType: typeof formData.buildingNumber,
-        streetNameType: typeof formData.streetName,
-        cityType: typeof formData.city,
-        countryType: typeof formData.country,
-        commercialRegistrationNumberType: typeof formData.commercialRegistrationNumber,
-        commercialRegistrationNumberValue: formData.commercialRegistrationNumber
-      });
 
       onLoading(true);
       onError(null);
       
       let response;
-
-      // البيانات للـ API الحالي (متوافق مع الـ frontend الحالي)
-      const companyData = {
-        name: (formData.name || "").trim(),
-        address: `${formData.buildingNumber || ""} ${formData.streetName || ""} ${formData.neighborhoodName || ""}`.trim(),
-        city: (formData.city || "").trim(),
-        country: (formData.country || "").trim(),
-        registrationNumber: (formData.commercialRegistrationNumber || "").toString(),
-        buildingNumber: (formData.buildingNumber || "").toString(),
-        streetName: (formData.streetName || "").trim(),
-        neighborhoodName: (formData.neighborhoodName || "").trim(),
-        postalCode: (formData.postalCode || "").trim(),
-        taxNumber: (formData.taxNumber || "").toString(),
-        branchesAllowed: formData.branchesAllowed ? parseInt(formData.branchesAllowed) : 0,
-        subscriptionStartDate: formData.subscriptionStartDate || "",
-        subscriptionEndDate: formData.subscriptionEndDate || "",
-        cost: formData.cost ? parseFloat(formData.cost) : 0,
-      };
-
-      // البيانات المُستقبلية لـ database schema الكامل (جاهز للـ backend المُحدث)
-      const futureCompanyData = {
-        NameCompany: (formData.name || "").trim(),
-        BuildingNumber: formData.buildingNumber ? parseInt(formData.buildingNumber) : null,
-        StreetName: (formData.streetName || "").trim(),
-        NeighborhoodName: (formData.neighborhoodName || "").trim(),
-        PostalCode: (formData.postalCode || "").trim(),
-        City: (formData.city || "").trim(),
-        Country: (formData.country || "").trim(),
-        CommercialRegistrationNumber: formData.commercialRegistrationNumber ? parseInt(formData.commercialRegistrationNumber) : null,
-        TaxNumber: formData.taxNumber ? parseInt(formData.taxNumber) : null,
-        NumberOFbranchesAllowed: formData.branchesAllowed ? parseInt(formData.branchesAllowed) : null,
-        SubscriptionStartDate: formData.subscriptionStartDate || null,
-        SubscriptionEndDate: formData.subscriptionEndDate || null,
-        Cost: formData.cost ? parseFloat(formData.cost) : null,
-      };
-
-              console.log('البيانات المُحضرة للإرسال:', {
-        companyData,
-        futureCompanyData,
-        isValid: companyData.name.length > 0,
-        operation: editingCompany ? 'تحديث' : 'إضافة'
-      });
+      
+      const isSaudi = !formData.country || formData.country.trim() === 'السعودية' || formData.country.trim() === 'Saudi Arabia';
+      const crn = String(formData.commercialRegistrationNumber || "").trim();
+      const taxNumber = String(formData.taxNumber || "").trim();
 
       if (editingCompany) {
-        console.log('✏️ تحديث شركة موجودة:', companyData);
-        response = await companiesSubscribedApi.updateCompany(editingCompany.id, companyData);
+        // ===== وضع التعديل =====
+        // التحقق فقط مما أدخله المستخدم فعلاً، الباكاند يدمج القيم مع القديمة
+        const originalCrn = String((editingCompany as any).commercialRegistrationNumber || editingCompany.registrationNumber || "").trim();
+        const crnChanged = crn !== "" && crn !== originalCrn;
+
+        // إذا غيّر المستخدم الرقم الموحد، تحقق من صحته
+        if (crnChanged) {
+          if (isSaudi) {
+            if (taxNumber.length > 0) {
+              // شركة سعودية
+              if (!crn.startsWith('7')) {
+                onError('رقم السجل التجاري للشركات السعودية يجب أن يبدأ بـ 7');
+                onLoading(false);
+                return;
+              }
+            } else {
+              // فرد سعودي
+              if (!/^[12]\d{9}$/.test(crn)) {
+                onError('رقم الهوية يجب أن يتكون من 10 أرقام ويبدأ بـ 1 (مواطن) أو 2 (مقيم)');
+                onLoading(false);
+                return;
+              }
+            }
+          } else {
+            // شركة أجنبية - فقط تأكد من أنه غير فارغ
+            if (crn.length === 0) {
+              onError('رقم السجل التجاري أو الهوية مطلوب للشركات الأجنبية');
+              onLoading(false);
+              return;
+            }
+          }
+        }
+
+        // التحقق من الرقم الضريبي إذا أدخله المستخدم
+        if (taxNumber.length > 0 && isSaudi) {
+          if (!/^3\d{13}3$/.test(taxNumber)) {
+            onError('الرقم الضريبي السعودي يجب أن يتكون من 15 رقم ويبدأ وينتهي بـ 3');
+            onLoading(false);
+            return;
+          }
+        }
+
+        const updatePayload: Record<string, any> = {
+          NameCompany: String(formData.name || "").trim(),
+          BuildingNumber: String(formData.buildingNumber || "").trim(),
+          StreetName: String(formData.streetName || "").trim(),
+          NeighborhoodName: String(formData.neighborhoodName || "").trim(),
+          PostalCode: isSaudi
+            ? String(formData.postalCode || "00000").replace(/\D/g, '').padStart(5, '0').slice(0, 5)
+            : String(formData.postalCode || "00000").padStart(5, '0').slice(0, 5),
+          City: String(formData.city || "").trim(),
+          Country: String(formData.country || "").trim(),
+          TaxNumber: taxNumber,
+        };
+
+        // أرسل الرقم الموحد فقط إذا غيّره المستخدم
+        if (crnChanged) {
+          updatePayload.CommercialRegistrationNumber = crn;
+        }
+
+        console.log('✏️ [الفرونتاند] تحديث بيانات الشركة:', { id: editingCompany.id, payload: updatePayload });
+        response = await companiesSubscribedApi.updateCompany(editingCompany.id, updatePayload);
       } else {
-        console.log('➕ إضافة شركة جديدة:', companyData);
+        // ===== وضع الإضافة =====
+        if (isSaudi) {
+          if (taxNumber.length > 0) {
+            // شركة سعودية: تحقق من الضريبة والرقم الموحد
+            if (!/^3\d{13}3$/.test(taxNumber)) {
+              onError('الرقم الضريبي السعودي يجب أن يتكون من 15 رقم ويبدأ وينتهي بـ 3');
+              onLoading(false);
+              return;
+            }
+            if (!crn.startsWith('7')) {
+              onError('رقم السجل التجاري للشركات السعودية يجب أن يبدأ بـ 7');
+              onLoading(false);
+              return;
+            }
+          } else {
+            // فرد سعودي: تحقق من رقم الهوية
+            if (!/^[12]\d{9}$/.test(crn)) {
+              onError('رقم الهوية يجب أن يتكون من 10 أرقام ويبدأ بـ 1 (مواطن) أو 2 (مقيم)');
+              onLoading(false);
+              return;
+            }
+          }
+        } else {
+          // شركة أجنبية: يجب أن يكون الرقم غير فارغ فقط
+          if (crn.length === 0) {
+            onError('رقم السجل التجاري أو الهوية مطلوب للشركات الأجنبية');
+            onLoading(false);
+            return;
+          }
+        }
+
+        const companyData = {
+          name: String(formData.name || "").trim(),
+          address: `${formData.buildingNumber || ""} ${formData.streetName || ""} ${formData.neighborhoodName || ""}`.trim(),
+          city: String(formData.city || "").trim(),
+          country: String(formData.country || "").trim(),
+          registrationNumber: crn,
+          buildingNumber: String(formData.buildingNumber || "").trim(),
+          streetName: String(formData.streetName || "").trim(),
+          neighborhoodName: String(formData.neighborhoodName || "").trim(),
+          postalCode: String(formData.postalCode || "00000").padStart(5, '0').slice(0, 5),
+          taxNumber: taxNumber,
+          branchesAllowed: formData.branchesAllowed ? parseInt(formData.branchesAllowed.toString(), 10) : 0,
+          subscriptionStartDate: formData.subscriptionStartDate || "",
+          subscriptionEndDate: formData.subscriptionEndDate || "",
+        };
+        console.log('➕ [الفرونتاند] إضافة شركة جديدة:', companyData);
         response = await companiesSubscribedApi.createCompany(companyData);
       }
 
       if (response.success) {
-        console.log('تم حفظ الشركة بنجاح:', response);
         showMessage(
-          editingCompany ? "تم تحديث الشركة بنجاح" : "تم إضافة الشركة بنجاح",
+          editingCompany ? "تم تحديث بيانات الشركة بنجاح" : "تم إضافة الشركة بنجاح",
           "success"
         );
         handleCloseDialog();
@@ -747,7 +777,9 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
           loadCompanies(currentPage);
         }
       } else {
-        throw new Error(response.error || "حدث خطأ أثناء حفظ الشركة");
+        // عرض رسائل الخطأ من الباكاند
+        const errMsg = response.error || "حدث خطأ أثناء حفظ الشركة";
+        throw new Error(errMsg);
       }
     } catch (error: any) {
       console.error("خطأ في حفظ الشركة:", error);
@@ -756,6 +788,7 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
       onLoading(false);
     }
   };
+
 
   // حذف شركة
   const handleDeleteCompany = async (company: Company) => {
@@ -1228,8 +1261,8 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
           'aria-modal': true,
         }}
       >
-        <DialogTitle id="company-dialog-title">
-          {editingCompany ? "تعديل الشركة" : "إضافة شركة جديدة"}
+        <DialogTitle id="company-dialog-title" sx={{ pb: 0 }}>
+          {editingCompany ? `تعديل بيانات: ${editingCompany.name}` : "إضافة شركة جديدة"}
         </DialogTitle>
         <DialogContent>
           {isDialogLoading && (
@@ -1257,25 +1290,56 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
               />
             </Grid>
             
+            {/* === الرقم الموحد / الهوية / السجل التجاري === */}
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="رقم التسجيل التجاري *"
-                type="number"
+                label={
+                  (() => {
+                    const isSaudi = !formData.country || formData.country.trim() === 'السعودية' || formData.country.trim() === 'Saudi Arabia';
+                    if (editingCompany) return 'الرقم الموحد / الهوية (اختياري - اتركه للإبقاء على الحالي)';
+                    if (!isSaudi) return 'رقم السجل التجاري أو الهوية *';
+                    const hasTax = (formData.taxNumber || '').trim().length > 0;
+                    return hasTax ? 'الرقم الموحد للشركة (يبدأ بـ 7) *' : 'رقم الهوية الوطنية (10 أرقام) *';
+                  })()
+                }
                 value={formData.commercialRegistrationNumber}
                 onChange={(e) => setFormData({ ...formData, commercialRegistrationNumber: e.target.value })}
-                required
+                required={!editingCompany}
+                helperText={
+                  (() => {
+                    const isSaudi = !formData.country || formData.country.trim() === 'السعودية' || formData.country.trim() === 'Saudi Arabia';
+                    if (editingCompany) return 'اتركه فارغاً للإبقاء على الرقم الحالي';
+                    if (!isSaudi) return '🌍 أجنبي: أي رقم تعريفي للمنشأة مقبول';
+                    const hasTax = (formData.taxNumber || '').trim().length > 0;
+                    return hasTax
+                      ? '🏢 شركة سعودية: الرقم الموحد يبدأ بـ 7 (10 أرقام)'
+                      : '👤 فرد سعودي: هوية وطنية تبدأ بـ 1 أو إقامة تبدأ بـ 2';
+                  })()
+                }
               />
             </Grid>
             
+            {/* === الرقم الضريبي === */}
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="الرقم الضريبي *"
-                type="number"
+                label={
+                  (() => {
+                    const isSaudi = !formData.country || formData.country.trim() === 'السعودية' || formData.country.trim() === 'Saudi Arabia';
+                    if (!isSaudi) return 'الرقم الضريبي (اختياري)';
+                    return 'الرقم الضريبي (للشركات السعودية - اتركه فارغاً للأفراد)';
+                  })()
+                }
                 value={formData.taxNumber}
                 onChange={(e) => setFormData({ ...formData, taxNumber: e.target.value })}
-                required
+                helperText={
+                  (() => {
+                    const isSaudi = !formData.country || formData.country.trim() === 'السعودية' || formData.country.trim() === 'Saudi Arabia';
+                    if (!isSaudi) return '🌍 أجنبي: الضريبة اختيارية وبأي صيغة';
+                    return '🏢 شركة سعودية: 15 رقم يبدأ وينتهي بـ 3 — 👤 فرد: اتركه فارغاً';
+                  })()
+                }
               />
             </Grid>
 
@@ -1290,10 +1354,10 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
               <TextField
                 fullWidth
                 label="رقم المبنى *"
-                type="number"
                 value={formData.buildingNumber}
                 onChange={(e) => setFormData({ ...formData, buildingNumber: e.target.value })}
                 required
+                helperText="أرقام فقط"
               />
             </Grid>
             
@@ -1324,86 +1388,92 @@ const CompaniesView: React.FC<CompaniesViewProps> = ({
                 value={formData.postalCode}
                 onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
                 required
+                helperText="5 أرقام"
               />
             </Grid>
             
             <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="المدينة *"
-                value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                required
+              <Autocomplete
+                options={countries.map((c) => c.name)}
+                value={formData.country || null}
+                onChange={(e, newValue) => setFormData({ ...formData, country: newValue || '', city: '' })}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="الدولة *"
+                    required
+                  />
+                )}
               />
             </Grid>
             
             <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="الدولة *"
-                value={formData.country}
-                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                required
+              <Autocomplete
+                options={formData.country && formData.country.trim() && provinces[formData.country.trim()] ? provinces[formData.country.trim()].map((p) => p.name) : []}
+                value={formData.city || null}
+                onChange={(e, newValue) => setFormData({ ...formData, city: newValue || '' })}
+                onInputChange={(e, newInputValue) => setFormData({ ...formData, city: newInputValue || '' })}
+                disabled={!formData.country}
+                freeSolo
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="المدينة *"
+                    required
+                  />
+                )}
               />
             </Grid>
 
-            {/* معلومات الاشتراك */}
-            <Grid item xs={12}>
-              <Typography variant="h6" color="primary" sx={{ mt: 2, mb: 1 }}>
-                معلومات الاشتراك
-              </Typography>
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="عدد الفروع المسموحة *"
-                type="number"
-                value={formData.branchesAllowed}
-                onChange={(e) => setFormData({ ...formData, branchesAllowed: e.target.value })}
-                required
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="التكلفة"
-                type="number"
-                value={formData.cost}
-                onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="تاريخ بداية الاشتراك (ميلادي)"
-                type="date"
-                value={formData.subscriptionStartDate}
-                onChange={(e) => setFormData({ ...formData, subscriptionStartDate: e.target.value })}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="تاريخ نهاية الاشتراك (ميلادي)"
-                type="date"
-                value={formData.subscriptionEndDate}
-                onChange={(e) => setFormData({ ...formData, subscriptionEndDate: e.target.value })}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            
-            
+            {/* حقول الإضافة فقط */}
+            {!editingCompany && (
+              <>
+                <Grid item xs={12}>
+                  <Typography variant="h6" color="primary" sx={{ mt: 2, mb: 1 }}>
+                    معلومات الاشتراك
+                  </Typography>
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="عدد الفروع المسموحة *"
+                    type="number"
+                    value={formData.branchesAllowed}
+                    onChange={(e) => setFormData({ ...formData, branchesAllowed: e.target.value })}
+                    required
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="تاريخ بداية الاشتراك (ميلادي)"
+                    type="date"
+                    value={formData.subscriptionStartDate}
+                    onChange={(e) => setFormData({ ...formData, subscriptionStartDate: e.target.value })}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="تاريخ نهاية الاشتراك (ميلادي)"
+                    type="date"
+                    value={formData.subscriptionEndDate}
+                    onChange={(e) => setFormData({ ...formData, subscriptionEndDate: e.target.value })}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+              </>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>إلغاء</Button>
           <Button variant="contained" onClick={handleSaveCompany} autoFocus>
-            {editingCompany ? "تحديث" : "إضافة"}
+            {editingCompany ? "حفظ التعديلات" : "إضافة"}
           </Button>
         </DialogActions>
       </Dialog>

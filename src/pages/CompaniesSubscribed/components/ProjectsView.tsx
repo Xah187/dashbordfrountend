@@ -410,25 +410,54 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
     try {
       onLoading(true);
-      const response = await companiesSubscribedApi.deleteProject(project.id);
+      
+      console.log('🗑️ [FRONTEND] بدء حذف المشروع:', {
+        projectId: project.id,
+        projectName: project.Nameproject,
+        branchId: branch.id,
+        companyId: company.id
+      });
+
+      // إرسال معرّف المشروع + معرّف الفرع + معرّف الشركة (الباك إند يحتاجها للتحقق)
+      const response = await companiesSubscribedApi.deleteProject(
+        project.id,
+        project.IDcompanySub || branch.id, // معرّف الفرع من المشروع نفسه أو من الـ props
+        company.id                           // معرّف الشركة
+      );
+
+      // تسجيل الاستجابة الكاملة من الباك إند
+      console.log('📡 [FRONTEND] استجابة الباك إند الكاملة:', JSON.stringify(response, null, 2));
+      console.log('📡 [FRONTEND] success value:', response?.success, '| type:', typeof response?.success);
+      console.log('📡 [FRONTEND] message:', response?.message, '| error:', response?.error);
 
       if (response.success) {
         showMessage("تم حذف المشروع بنجاح", "success");
 
-        // إعادة تحميل الصفحة الحالية أو الصفحة السابقة إذا كانت الحالية فارغة
+        // 1. أزل المشروع فوراً من القائمة المحلية (لتجنب ظهوره من الكاش)
         const remainingProjects = projects.filter(p => p.id !== project.id);
-        if (remainingProjects.length === 0 && currentPage > 1) {
-          // إذا لم تعد هناك مشاريع في الصفحة الحالية، انتقل للصفحة السابقة
-          loadProjects(currentPage - 1);
-        } else {
-          // أعد تحميل الصفحة الحالية
-          loadProjects(currentPage);
-        }
+        setProjects(remainingProjects);
+
+        // 2. انتظر ثانيتين ثم أعد تحميل البيانات من الخادم (لإعطاء الباك إند وقتاً للحذف)
+        setTimeout(() => {
+          if (remainingProjects.length === 0 && currentPage > 1) {
+            loadProjects(currentPage - 1, true);
+          } else {
+            loadProjects(1, true);
+          }
+        }, 2000);
+
       } else {
-        throw new Error(response.error || "حدث خطأ أثناء حذف المشروع");
+        const errMsg = response.error || "حدث خطأ أثناء حذف المشروع";
+        console.error('❌ [FRONTEND] فشل الحذف - الاستجابة:', response);
+        throw new Error(errMsg);
       }
     } catch (error: any) {
-      console.error("خطأ في حذف المشروع:", error);
+      console.error("❌ [FRONTEND] خطأ في حذف المشروع:", error);
+      console.error("❌ [FRONTEND] تفاصيل:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
       onError(error.message || "حدث خطأ أثناء حذف المشروع");
     } finally {
       onLoading(false);
